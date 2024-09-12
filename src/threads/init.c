@@ -134,6 +134,7 @@ pintos_init (void)
     run_actions (argv);
   } else {
     // TODO: no command line passed to kernel. Run interactively 
+    run_actions (argv);
   }
 
   /* Finish up. */
