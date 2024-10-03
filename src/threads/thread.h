@@ -11,7 +11,8 @@ enum thread_status
     THREAD_RUNNING,     /**< Running thread. */
     THREAD_READY,       /**< Not running but ready to run. */
     THREAD_BLOCKED,     /**< Waiting for an event to trigger. */
-    THREAD_DYING        /**< About to be destroyed. */
+    THREAD_DYING,        /**< About to be destroyed. */
+    THREAD_SLEEPING
   };
 
 /** Thread identifier type.
@@ -88,6 +89,10 @@ struct thread
     char name[16];                      /**< Name (for debugging purposes). */
     uint8_t *stack;                     /**< Saved stack pointer. */
     int priority;                       /**< Priority. */
+    int origin_priority;                /*原始优先级*/
+    int64_t ticks;
+    struct lock* waiting_lock;          /*一个线程只能等待一个锁，否则不会继续运行*/
+    struct list holding_locks;         /*一个线程可以同时持有多把锁*/
     struct list_elem allelem;           /**< List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -126,6 +131,9 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
+void thread_sleep(void);
+void thread_wakeup(void);
+
 /** Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
@@ -133,6 +141,7 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+bool list_elem_priority_less(struct list_elem*, struct list_elem* , void *);
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);

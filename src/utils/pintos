@@ -571,7 +571,7 @@ cpu: ips=1000000
 megs: $mem
 log: bochsout.txt
 panic: action=fatal
-user_shortcut: keys=ctrlaltdel
+# user_shortcut: keys=ctrlaltdel
 EOF
   print BOCHSRC "gdbstub: enabled=1, port=$gdbport\n" if $debug eq 'gdb';
   print BOCHSRC "clock: sync=", $realtime ? 'realtime' : 'none',
@@ -582,6 +582,7 @@ EOF
   print_bochs_disk_line ("ata0-slave", $disks[1]);
   print_bochs_disk_line ("ata1-master", $disks[2]);
   print_bochs_disk_line ("ata1-slave", $disks[3]);
+  # print BOCHSRC "display_library: x, options='gui_debug'\n";
   if ($vga ne 'terminal') {
     if ($serial) {
       my $mode = defined ($squish_pty) ? "term" : "file";

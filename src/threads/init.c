@@ -134,6 +134,26 @@ pintos_init (void)
     run_actions (argv);
   } else {
     // TODO: no command line passed to kernel. Run interactively 
+    char buf[128];
+    int len;
+    len=0;
+    printf("USTCOS>");
+    while(1){
+      char c = input_getc();
+      if(c==13){
+        buf[len++]='\0';
+        argv[0]=buf;
+        argv=parse_options (argv);
+        run_actions (argv);
+        printf("exec %s\n", buf);
+        len=0;
+        printf("USTCOS>");
+      }else{
+        buf[len++]=c;
+        printf("%c", c);
+      }
+    }
+    
   }
 
   /* Finish up. */
@@ -313,6 +333,8 @@ run_actions (char **argv)
   static const struct action actions[] = 
     {
       {"run", 2, run_task},
+      // {"whoami", 1, run_whoami},
+      // {"exit", 1, run_exit}
 #ifdef FILESYS
       {"ls", 1, fsutil_ls},
       {"cat", 2, fsutil_cat},
@@ -346,6 +368,15 @@ run_actions (char **argv)
     }
   
 }
+// void run_whoami(){
+//   printf("SA24225375-武世安\n");
+// }
+// void run_exit(){
+//   // asm volatile()(
+//   //   "iret"
+//   // );
+//   return;
+// }
 
 /** Prints a kernel command line help message and powers off the
    machine. */

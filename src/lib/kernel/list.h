@@ -85,14 +85,14 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
+//链表元素，储存链表前一个元素和后一个元素
 /** List element. */
 struct list_elem 
   {
     struct list_elem *prev;     /**< Previous list element. */
     struct list_elem *next;     /**< Next list element. */
   };
-
+//链表，储存链表head元素和链表tail元素
 /** List. */
 struct list 
   {
@@ -105,6 +105,14 @@ struct list
    name of the outer structure STRUCT and the member name MEMBER
    of the list element.  See the big comment at the top of the
    file for an example. */
+// 从链表元素获得对应的结构体元素
+/*
+判断侵入式结构和非侵入式结构：数据结构是否会影响或“破坏”数据结构的本身
+把数据结构（部分结构）嵌入到数据结构，方便管理。
+list_entry将链表域转到数据域
+由成员变量偏移+强制类型转换获得数据域
+offsetof获取从0地址开始的结构结构体MEMBER
+ */
 #define list_entry(LIST_ELEM, STRUCT, MEMBER)           \
         ((STRUCT *) ((uint8_t *) &(LIST_ELEM)->next     \
                      - offsetof (STRUCT, MEMBER.next)))
@@ -119,6 +127,7 @@ struct list
    or with an initializer using LIST_INITIALIZER:
 
        struct list my_list = LIST_INITIALIZER (my_list); */
+//相当于进行了struct list my_list;list_init (&my_list);两步操作
 #define LIST_INITIALIZER(NAME) { { NULL, &(NAME).tail }, \
                                  { &(NAME).head, NULL } }
 

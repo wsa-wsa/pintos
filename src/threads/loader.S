@@ -24,7 +24,7 @@
 	sub %ax, %ax
 	mov %ax, %ds
 	mov %ax, %ss
-	mov $0xf000, %esp
+	mov $0xf000, %esp #为什么是0xf000
 
 # Configure serial port so we can report progress without connected VGA.
 # See [IntrList] for details.
@@ -127,7 +127,7 @@ load_kernel:
 1:
 
 	mov %es:8(%si), %ebx		# EBX = first sector
-	mov $0x2000, %ax		# Start load address: 0x20000
+	mov $0x2000, %ax		# Start load address: 0x20000 读取磁盘中start.S的代码段并加载的内存位置
 
 next_sector:
 	# Read one sector into memory.
@@ -164,8 +164,8 @@ next_sector:
 	mov %ax, %es
 	mov %es:0x18, %dx
 	mov %dx, start
-	movw $0x2000, start + 2
-	ljmp *start
+	movw $0x2000, start + 2 #将start+2的地址复写成0x2000,当指令执行到start+2时会跳转到0x2000执行
+	ljmp *start	#跳转到start函数
 
 read_failed:
 start:
@@ -181,7 +181,7 @@ start:
 #### code stream just after the call, and then returns to the byte
 #### just after the terminating null.  This subroutine preserves all
 #### general-purpose registers.
-
+# 将ss:esp栈顶元素和si寄存器的内容交换，将ax压入栈中
 puts:	xchg %si, %ss:(%esp)
 	push %ax
 next_char:
