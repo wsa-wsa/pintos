@@ -6,10 +6,13 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
-
+#include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "threads/synch.h"
 /** Partition that contains the file system. */
 struct block *fs_device;
 
+struct lock filesys_lock;
 static void do_format (void);
 
 /** Initializes the file system module.
@@ -66,13 +69,12 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
+  lock_acquire(&filesys_lock);
   struct dir *dir = dir_open_root ();
   struct inode *inode = NULL;
-
-  if (dir != NULL)
-    dir_lookup (dir, name, &inode);
+  if (dir != NULL)dir_lookup (dir, name, &inode);
   dir_close (dir);
-
+  lock_release(&filesys_lock);
   return file_open (inode);
 }
 
@@ -100,4 +102,114 @@ do_format (void)
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
+}
+void remove_fd(int fd){
+  struct thread * cur = thread_current();
+  if(fd<0||fd>=NOFILE||cur->ofile[fd]==0)PANIC("The fd is incorrect!!!");
+  cur->ofile[fd]=0;
+}
+int get_fd(struct file *file){
+  struct thread * cur = thread_current();
+  for(int fd=0; fd<NOFILE; ++fd){
+    if(cur->ofile[fd]==0){
+      cur->ofile[fd]=file;
+      return fd;
+    }
+  }
+  return -1;
+}
+struct file *get_file(int fd){
+  struct thread * cur = thread_current();
+  if(fd<0||fd>=NOFILE||cur->ofile[fd]==0)sys_exit(-1);
+  return cur->ofile[fd];
+}
+
+bool sys_create (const char *file, unsigned initial_size){
+  if(!file||get_user(file)==-1){
+    sys_exit(-1);
+  }
+  return filesys_create(file, initial_size);
+}
+
+bool sys_remove (const char *file){
+  return filesys_remove(file);
+}
+
+int sys_open (const char *file){
+  if(!file||get_user(file)==-1){
+    sys_exit(-1);
+  }
+  struct file * f = filesys_open(file);
+  if(!f)return -1;
+  int fd = get_fd(f);
+  return fd;
+}
+
+int sys_filesize (int fd){
+  struct file * f = get_file(fd);
+  return file_length(f);
+}
+
+int sys_read (int fd, char *buffer, unsigned length){
+  if(length==0)return 0;
+  if(!buffer||!put_user(buffer, 0)||(uint32_t)buffer >= PHYS_BASE){
+    sys_exit(-1);
+  }
+  if(fd==STDOUT_FILENO){
+    // struct file *f =get_file(fd);
+    // f->sw.read(STDOUT_FILENO, buffer, length);
+      // printf("begin:");
+      int i;
+      for(i=0; i<length; ++i){
+        // buffer[i] = input_getc();
+        // if(c=='\n')return i;
+        // =c;
+      }
+      return i+1;
+  }else{
+    struct file* file = get_file(fd);
+    if(!file)return -1;
+    lock_acquire(&filesys_lock);
+    length=file_read(file, buffer, length);
+    lock_release(&filesys_lock);
+    return length;
+  }
+
+}
+
+int sys_write (int fd, const void *buffer, unsigned length){
+  if(!buffer||get_user(buffer)==-1){
+    sys_exit(-1);
+  }
+  if(fd==STDOUT_FILENO){
+    putbuf(buffer, length);
+  }else if(fd==STDIN_FILENO){
+    
+  }else{
+    struct file *file = get_file(fd);
+    if(!file)sys_exit(-1);
+    // lock_acquire(&filesys_lock);
+    length = file_write(file, buffer, length);
+    // lock_release(&filesys_lock);
+  }
+  return length;
+}
+
+void sys_seek (int fd, unsigned position){
+  struct file *file=get_file(fd);
+  file_seek(file, position);
+}
+unsigned sys_tell (int fd){
+  struct file *file=get_file(fd);
+  return file_tell(file);
+}
+void sys_close (int fd){
+  if(fd==STDIN_FILENO){
+    return;
+  }else if(fd==STDOUT_FILENO){
+    return;
+  }
+  struct file *file=get_file(fd);
+  remove_fd(fd);
+  return file_close(file);
 }

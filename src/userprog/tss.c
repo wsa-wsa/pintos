@@ -98,6 +98,7 @@ tss_get (void)
 
 /** Sets the ring 0 stack pointer in the TSS to point to the end
    of the thread stack. */
+// 将tss段的esp0指向当前线程的一个PAGESIZE的位置
 void
 tss_update (void) 
 {

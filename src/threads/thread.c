@@ -13,6 +13,8 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "lib/kernel/console.h"
+#include "filesys/file.h"
 #endif
 
 /** Random value for struct thread's `magic' member.
@@ -23,6 +25,8 @@
 /** List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+static struct list sleep_list;
 
 /** List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -54,6 +58,7 @@ static long long user_ticks;    /**< # of timer ticks in user programs. */
 #define TIME_SLICE 4            /**< # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /**< # of timer ticks since last yield. */
 
+static struct file stdio;
 /** If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -71,6 +76,14 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+void stdio_init(struct file *stdio){
+  stdio->inode=NULL;
+  stdio->pos=0;
+  stdio->ref=1;
+  stdio->deny_write=false;
+  stdio->sw.write=console_write;
+  stdio->sw.read=console_read;
+}
 /** Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -90,14 +103,27 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  sema_init(&process_sema, 0);
+  lock_init(&process_lock);
+  lock_init(&filesys_lock);
   list_init (&ready_list);
+  list_init(&sleep_list);
   list_init (&all_list);
+  stdio_init(&stdio);
 
+  // 给正在运行的线程构建线程结构
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->xstatus = 0;
+  initial_thread->chan = 0;
+  initial_thread->parent = 0;
+  // struct file f;
+  initial_thread->ofile[STDIN_FILENO]=&stdio;
+  initial_thread->ofile[STDOUT_FILENO]=&stdio;
+  initial_thread->exec = NULL;
 }
 
 /** Starts preemptive thread scheduling by enabling interrupts.
@@ -182,7 +208,10 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-
+  t->parent = thread_current();
+  t->ofile[STDIN_FILENO]=&stdio;
+  t->ofile[STDOUT_FILENO]=&stdio;
+  t->exec = NULL;
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -203,7 +232,64 @@ thread_create (const char *name, int priority,
 
   return tid;
 }
+void thread_sleep(void * chan)
+{
+    struct thread *cur = thread_current ();
+    enum intr_level old_level;
+    
+    ASSERT (!intr_context ());
+    // initial_thread;
+    old_level = intr_disable ();
+    if (cur != idle_thread){
+      cur->status = THREAD_SLEEPING;
+      cur->chan = chan;
+      list_push_back(&sleep_list, &cur->elem);
+      schedule ();
+      cur->chan = 0;
+    }
+    intr_set_level (old_level);
+}
 
+void thread_wakeup(void * chan)
+{
+  struct list_elem *cur;
+  for(cur=list_begin(&sleep_list); cur!=list_end(&sleep_list);){
+    struct thread * t=list_entry(cur, struct thread, elem);
+    if(t->chan==chan){
+      struct list_elem *list=cur;
+      cur=list_remove(cur);
+      list_push_back(&ready_list, &t->elem);
+      t->status=THREAD_READY;
+    }else{
+      cur=list_next(cur);
+    }
+  }
+}
+
+void thread_wait(tid_t tid){
+  struct thread * cur = thread_current();
+  struct list_elem *e;
+  ASSERT (intr_get_level () == INTR_OFF);
+  for (e = list_begin (&all_list); e != list_end (&all_list);e = list_next (e)){
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if(t->tid==tid){
+        if(t->parent==cur){
+          if(t->status!=THREAD_DYING){
+            thread_sleep(cur);
+          }
+          if (t->status == THREAD_DYING && t != initial_thread) {
+            list_remove(e);
+            cur->xstatus=t->xstatus;
+            ASSERT (t != cur);
+            palloc_free_page (t);
+          }
+        }
+        else cur->xstatus=-1;
+        return;
+      }
+  }
+  cur->xstatus=-1;
+}
 /** Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
@@ -290,7 +376,8 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current()->allelem);
+  // list_remove (&thread_current()->allelem);
+  // 变成僵尸进程，等待父进程的清理
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -464,6 +551,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
+  t->xstatus = 0;
+  t->chan = 0;
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -535,11 +624,11 @@ thread_schedule_tail (struct thread *prev)
      pull out the rug under itself.  (We don't free
      initial_thread because its memory was not obtained via
      palloc().) */
-  if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
-    {
-      ASSERT (prev != cur);
-      palloc_free_page (prev);
-    }
+  // if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
+  //   {
+  //     ASSERT (prev != cur);
+  //     palloc_free_page (prev);
+  //   }
 }
 
 /** Schedules a new process.  At entry, interrupts must be off and

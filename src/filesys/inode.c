@@ -29,6 +29,7 @@ bytes_to_sectors (off_t size)
 }
 
 /** In-memory inode. */
+/** inode 结构体 */
 struct inode 
   {
     struct list_elem elem;              /**< Element in inode list. */

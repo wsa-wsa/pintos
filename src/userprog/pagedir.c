@@ -13,6 +13,7 @@ static void invalidate_pagedir (uint32_t *);
    virtual addresses, but none for user virtual addresses.
    Returns the new page directory, or a null pointer if memory
    allocation fails. */
+/** 创建一个新的有内核映射的虚拟地址页目录表地址 */
 uint32_t *
 pagedir_create (void) 
 {
@@ -24,6 +25,7 @@ pagedir_create (void)
 
 /** Destroys page directory PD, freeing all the pages it
    references. */
+/** 销毁页目录PD，释放所有它引用的页面 */
 void
 pagedir_destroy (uint32_t *pd) 
 {
@@ -53,6 +55,7 @@ pagedir_destroy (uint32_t *pd)
    on CREATE.  If CREATE is true, then a new page table is
    created and a pointer into it is returned.  Otherwise, a null
    pointer is returned. */
+/** 返回VADDR的页面入口PD */
 static uint32_t *
 lookup_page (uint32_t *pd, const void *vaddr, bool create)
 {
@@ -227,6 +230,7 @@ pagedir_activate (uint32_t *pd)
      new page tables immediately.  See [IA32-v2a] "MOV--Move
      to/from Control Registers" and [IA32-v3a] 3.7.5 "Base
      Address of the Page Directory". */
+  //cr3寄存器，又名PDBR页目录寄存器
   asm volatile ("movl %0, %%cr3" : : "r" (vtop (pd)) : "memory");
 }
 

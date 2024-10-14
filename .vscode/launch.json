@@ -1,0 +1,74 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type":"cppdbg",
+            "request": "launch",
+            "name": "Threads",
+            "cwd": "${workspaceRoot}/src/threads",
+            "program": "${workspaceRoot}/src/threads/build/kernel.o",
+            "miDebuggerServerAddress": "localhost:1234",
+            "miDebuggerPath": "/home/wsa/Desktop/toolchain/x86_64/bin/i386-elf-gdb",
+            // "preLaunchTask":"userprogbulid",
+            "stopAtEntry": true
+        },
+        {
+            "type":"cppdbg",
+            "request": "launch",
+            "name": "Userprog",
+            "cwd": "${workspaceRoot}/src/userprog",
+            "program": "${workspaceRoot}/src/userprog/build/kernel.o",
+            "miDebuggerServerAddress": "localhost:1234",
+            "miDebuggerPath": "/home/wsa/Desktop/toolchain/x86_64/bin/i386-elf-gdb",
+            // "preLaunchTask":"userprogbulid",
+            "stopAtEntry": true,
+            "setupCommands": [
+                // {
+                //   "text": "add-symbol-file ${workspaceRoot}/src/userprog/build/lib/user/entry.o 0x804873b",
+                //   "description": "Load entry.o symbols",
+                //   "ignoreFailures": true
+                // },
+                // {
+                //   "text": "add-symbol-file ${workspaceRoot}/src/userprog/build/tests/userprog/args.o 0x8048074",
+                //   "description": "Load symbols",
+                //   "ignoreFailures": true
+                // },
+                // {
+                //   "text": "add-symbol-file ${workspaceRoot}/src/userprog/build/tests/lib.o 0x08048145",
+                //   "description": "Load entry.o symbols",
+                //   "ignoreFailures": true
+                // },
+                // {
+                //   "text": "add-symbol-file ${workspaceRoot}/src/userprog/build/lib/stdio.o 0x080488EA",
+                //   "description": "Load entry.o symbols",
+                //   "ignoreFailures": true
+                // },
+                // {
+                //   "text": "add-symbol-file ${workspaceRoot}/src/userprog/build/lib/user/syscall.o 0x08049CAD",
+                //   "description": "Load entry.o symbols",
+                //   "ignoreFailures": true
+                // },
+                {
+                  "description": "Enable assembly display",
+                  "text": "-enable-pretty-printing",
+                  "ignoreFailures": true
+                },
+                {
+                  "description": "Display assembly",
+                  "text": "set disassembly-flavor intel"
+                },
+                {
+                    "text": "-enable-pretty-printing", // 启用美化输出
+                    "description": "enable pretty printing",
+                    "ignoreFailures": true
+                }
+
+              ],
+              "internalConsoleOptions": "openOnSessionStart",
+              
+        },
+    ]
+}

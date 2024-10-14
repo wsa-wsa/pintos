@@ -588,7 +588,10 @@ __printf (const char *format,
    arranged 16 per line.  Numeric offsets are also included,
    starting at OFS for the first byte in BUF.  If ASCII is true
    then the corresponding ASCII characters are also rendered
-   alongside. */   
+   alongside. */  
+/** 将 BUF 中的 SIZE 字节作为十六进制字节转储到控制台每行安排 16 个。 
+ * 还包括数字偏移量，从 BUF 中第一个字节的 OFS 开始。 如果 ASCII 为 true
+ * 则也会呈现相应的 ASCII 字符旁边。 */ 
 void
 hex_dump (uintptr_t ofs, const void *buf_, size_t size, bool ascii)
 {

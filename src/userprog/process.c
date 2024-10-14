@@ -17,16 +17,24 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+struct parameter
+{
+  char * cmd_line;
+  bool * success;
+};
 
+struct semaphore process_sema;
+struct lock process_lock;
 /** Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *args) 
 {
   char *fn_copy;
   tid_t tid;
@@ -36,21 +44,56 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, args, PGSIZE);
+  char file_name[16];
+  for(int i=0; i<16; ++i){
+    if(args[i]==' '){
+      file_name[i]='\0';
+      break;
+    }
+    file_name[i]=args[i];
+  }
+  file_name[15]='\0';
 
+  struct parameter arg;
+  bool success=false;
+  arg.cmd_line=fn_copy;
+  arg.success=&success;
+  // sema_init(&process_sema, 0);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  // lock_acquire(&process_lock);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, &arg);
+  
+  // lock_release(&process_lock);
+  sema_down(&process_sema);
+  if (tid == TID_ERROR){
+    palloc_free_page (fn_copy);
+  }
+  if(!success){
+    tid = TID_ERROR;
+  }
+  // enum intr_level old_level;
+  // old_level = intr_disable ();
+  // intr_set_level (old_level);
   return tid;
 }
 
 /** A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *parameters)
 {
-  char *file_name = file_name_;
+  struct parameter* parameter=parameters;
+  char *args = (struct parameter*)parameter->cmd_line;
+  char *token, *save_ptr;
+  static char *argv[LOADER_ARGS_LEN / 2 + 1];
+  int argc=0;
+  for (token = strtok_r (args, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+    argv[argc++]=token;
+  }
+  argv[argc]=NULL;
+
+  char *file_name=argv[0];
   struct intr_frame if_;
   bool success;
 
@@ -61,11 +104,39 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /* If load failed, quit. */
+  *(parameter->success)=success;
+  sema_up(&process_sema);
+  if (!success) {
+    /* If load failed, quit. */
+    palloc_free_page (file_name);
+    sys_exit(-1);
+  }
+  thread_yield (); 
+  for(int i=argc-1; ~i; --i){
+    int n = strlen(argv[i]);
+    if_.esp -= (n + 1);
+    strlcpy (if_.esp, argv[i], n+1);
+    argv[i]=if_.esp;
+  }
+  if_.esp=ROUND_DOWN((uint32_t)if_.esp, sizeof(uint32_t));
+  for(int i=argc; ~i; --i){
+    if_.esp-=sizeof (char*);
+    memcpy(if_.esp, argv+i, sizeof (char*));
+  }
+  char *start_argv=if_.esp;
+  if_.esp-=sizeof (char**);
+  memcpy(if_.esp, &start_argv, sizeof (char**));
+  if_.esp-=sizeof (char*);
+  memcpy(if_.esp, &argc, sizeof (int));
+  if_.esp-=sizeof (void*);
+  *(int *)if_.esp = 0;
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
-
+  // thread_wakeup()
+  // struct thread * cur = thread_current();
+  // thread_wakeup(cur->parent);
+  // hex_dump(if_.esp, if_.esp, p-(char*)if_.esp, true);
+  // push_argument(p, argc, argv);
+  // printf("file name is '%s'\n", file_name);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -88,7 +159,13 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  thread_wait(child_tid);
+  intr_set_level (old_level);
+
+  return thread_current()->xstatus;
 }
 
 /** Free the current process's resources. */
@@ -98,6 +175,7 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  printf("%s: exit(%d)\n", cur->name, cur->xstatus);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -291,6 +369,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
+              //将可执行文件的各个段加载到内存中
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
@@ -309,7 +388,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
-
+  t->exec = file;
+  file_deny_write(file);
+  // inode_allow_write (file->inode);
+  // inode_close (file->inode);
+  return success;
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
@@ -460,6 +543,47 @@ install_page (void *upage, void *kpage, bool writable)
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
+  //验证该虚拟地址中是否还没有页面，然后将我们的页面映射到那里。
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+void sys_halt(void){
+  shutdown_power_off();
+}
+
+void sys_exit(int status){
+  struct thread *cur=thread_current();
+  if(status<-1){
+    status=-1;
+  }else if(status>255)status%=256;
+  cur->xstatus=status;
+  // if(cur->parent&&cur->parent->chan==cur->parent){
+  //   cur->parent->xstatus=status;
+    
+  // }
+
+  thread_wakeup(cur->parent);
+  file_close(cur->exec);
+  thread_exit();
+}
+
+int sys_wait (tid_t tid){
+  
+  return process_wait(tid);
+}
+unsigned sys_exec (const char *file){
+  if(!file)sys_exit(-1);
+  char args[128];
+  if(get_user(file)==-1)sys_exit(-1);
+  // TODO： 待修正
+  for(int i=0; i<128&&file[i]!='\0'; ++i){
+    if(get_user(file+i+1)==-1)sys_exit(-1);
+    args[i]=file[i];
+  }
+  // thread_sleep(thread_current());
+  // lock_acquire(&process_lock);
+  int ret = process_execute(file);
+  // lock_release(&process_lock);
+  return ret;
 }

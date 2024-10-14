@@ -302,7 +302,9 @@ strlen (const char *string)
 }
 
 /** If STRING is less than MAXLEN characters in length, returns
-   its actual length.  Otherwise, returns MAXLEN. */
+   its actual length.  Otherwise, returns MAXLEN. 
+   计算少于MAXLEN的最长字符串
+   */
 size_t
 strnlen (const char *string, size_t maxlen) 
 {

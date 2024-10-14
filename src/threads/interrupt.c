@@ -188,7 +188,7 @@ intr_register_ext (uint8_t vec_no, intr_handler_func *handler,
 /** Registers internal interrupt VEC_NO to invoke HANDLER, which
    is named NAME for debugging purposes.  The interrupt handler
    will be invoked with interrupt status LEVEL.
-
+   注册内部中断VEC_NO去调用HDANDLER, 中断以LEVEL状态调用
    The handler will have descriptor privilege level DPL, meaning
    that it can be invoked intentionally when the processor is in
    the DPL or lower-numbered ring.  In practice, DPL==3 allows
@@ -275,7 +275,7 @@ pic_end_of_interrupt (int irq)
 }
 
 /** Creates an gate that invokes FUNCTION.
-
+ * 创建唤醒的FUNCTION在一个gate上
    The gate has descriptor privilege level DPL, meaning that it
    can be invoked intentionally when the processor is in the DPL
    or lower-numbered ring.  In practice, DPL==3 allows user mode

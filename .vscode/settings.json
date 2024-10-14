@@ -1,0 +1,28 @@
+{
+    "files.associations": {
+        "syscall-nr.h": "c",
+        "*.inc": "c",
+        "syscall.h": "c",
+        "stdio.h": "c",
+        "interrupt.h": "c",
+        "thread.h": "c",
+        "cstdlib": "c",
+        "random.h": "c",
+        "lib.h": "c",
+        "cstdarg": "cpp",
+        "synch.h": "c",
+        "stdint.h": "c",
+        "filesys.h": "c",
+        "file.h": "c",
+        "inode.h": "c",
+        "malloc.h": "c",
+        "off_t.h": "c",
+        "stddef.h": "c",
+        "console.h": "c",
+        "vaddr.h": "c",
+        "pagedir.h": "c",
+        "init.h": "c",
+        "pte.h": "c",
+        "palloc.h": "c"
+    }
+}

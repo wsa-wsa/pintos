@@ -38,6 +38,7 @@ devices_SRC += devices/shutdown.c	# Reboot and power off.
 devices_SRC += devices/speaker.c	# PC speaker.
 
 # Library code shared between kernel and user programs.
+# 在内核和用户进程之间共享的库代码。
 lib_SRC  = lib/debug.c			# Debug helpers.
 lib_SRC += lib/random.c			# Pseudo-random numbers.
 lib_SRC += lib/stdio.c			# I/O library.
@@ -52,6 +53,10 @@ lib/kernel_SRC += lib/kernel/list.c	# Doubly-linked lists.
 lib/kernel_SRC += lib/kernel/bitmap.c	# Bitmaps.
 lib/kernel_SRC += lib/kernel/hash.c	# Hash tables.
 lib/kernel_SRC += lib/kernel/console.c	# printf(), putchar().
+
+# User-specific library code.
+lib/user_SRC  = lib/user/entry.c
+lib/user_SRC  += lib/user/syscall.c
 
 # User process code.
 userprog_SRC  = userprog/process.c	# Process loading.
@@ -76,8 +81,10 @@ SOURCES = $(foreach dir,$(KERNEL_SUBDIRS),$($(dir)_SRC))
 OBJECTS = $(patsubst %.c,%.o,$(patsubst %.S,%.o,$(SOURCES)))
 DEPENDS = $(patsubst %.o,%.d,$(OBJECTS))
 
-GDBPORT := $(shell expr `id -u` % 5000 + 25000)
+#GDBPORT := $(shell expr `id -u` % 5000 + 25000)
+GDBPORT := 1234
 IMAGE = kernel.img
+FILESYS = filesys.dsk
 QEMUOPTS = -serial mon:stdio -gdb tcp::$(GDBPORT)
 QEMUOPTS += $(shell if $(QEMU) -nographic -help | grep -q '^-D '; then echo '-D qemu.log'; fi)
 
@@ -124,6 +131,28 @@ qemu-nox: $(IMAGE)
 	@echo "***"
 	$(QEMU) -nographic -drive file=$(IMAGE),index=0,media=disk,format=raw $(QEMUOPTS)
 
+qemu-nox-user: $(IMAGE) $(FILESYS)
+	@echo "***"
+	@echo "*** Use Ctrl-a x to exit qemu. If you are under GNU Screen or Tmux and "
+	@echo "*** its prefix key is Ctrl-a, press Ctrl-a twice and x to exit."
+	@echo "***"
+	$(QEMU) -nographic \
+	-drive file=$(IMAGE),index=0,media=disk,format=raw \
+	-drive file=$(FILESYS),index=1,media=disk,format=raw \
+	$(QEMUOPTS)
+
+.gdbinit: .gdbinit.tmpl
+	sed "s/:26000/:$(GDBPORT)/" < $^ > $@
+
+qemu-nox-user-gdb: $(IMAGE) $(FILESYS) .gdbinit
+	@echo "***"
+	@echo "*** Use Ctrl-a x to exit qemu. If you are under GNU Screen or Tmux and "
+	@echo "*** its prefix key is Ctrl-a, press Ctrl-a twice and x to exit."
+	@echo "***"
+	$(QEMU) -S -nographic \
+	-drive file=$(IMAGE),index=0,media=disk,format=raw \
+	-drive file=$(FILESYS),index=1,media=disk,format=raw \
+	$(QEMUOPTS)
 clean::
 	rm -f $(OBJECTS) $(DEPENDS) 
 	rm -f threads/loader.o threads/kernel.lds.s threads/loader.d

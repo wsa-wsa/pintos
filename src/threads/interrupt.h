@@ -16,11 +16,12 @@ enum intr_level intr_set_level (enum intr_level);
 enum intr_level intr_enable (void);
 enum intr_level intr_disable (void);
 
-/** Interrupt stack frame. */
+/** Interrupt stack frame. 中断帧*/
 struct intr_frame
   {
     /* Pushed by intr_entry in intr-stubs.S.
        These are the interrupted task's saved registers. */
+    // 被intr_entry保存的寄存器
     uint32_t edi;               /**< Saved EDI. */
     uint32_t esi;               /**< Saved ESI. */
     uint32_t ebp;               /**< Saved EBP. */
@@ -35,6 +36,7 @@ struct intr_frame
     uint16_t ds, :16;           /**< Saved DS segment register. */
 
     /* Pushed by intrNN_stub in intr-stubs.S. */
+    // 被相应的intr保存
     uint32_t vec_no;            /**< Interrupt vector number. */
 
     /* Sometimes pushed by the CPU,
@@ -44,14 +46,16 @@ struct intr_frame
 
     /* Pushed by intrNN_stub in intr-stubs.S.
        This frame pointer eases interpretation of backtraces. */
+    // 被相应的intr保存
     void *frame_pointer;        /**< Saved EBP (frame pointer). */
 
     /* Pushed by the CPU.
        These are the interrupted task's saved registers. */
+    // 被CUP压入栈中,在执行中断时被保存
     void (*eip) (void);         /**< Next instruction to execute. */
     uint16_t cs, :16;           /**< Code segment for eip. */
     uint32_t eflags;            /**< Saved CPU flags. */
-    void *esp;                  /**< Saved stack pointer. */
+    void *esp;                  /**< Saved stack pointer. 存储栈指针 */
     uint16_t ss, :16;           /**< Data segment for esp. */
   };
 

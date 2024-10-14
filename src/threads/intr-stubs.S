@@ -18,6 +18,7 @@
 .func intr_entry
 intr_entry:
 	/* Save caller's registers. */
+        /* 保存调用方寄存器 */
 	pushl %ds
 	pushl %es
 	pushl %fs
@@ -25,6 +26,7 @@ intr_entry:
 	pushal
         
 	/* Set up kernel environment. */
+        /* 设置内核环境 */
 	cld			/* String instructions go upward. */
 	mov $SEL_KDSEG, %eax	/* Initialize segment registers. */
 	mov %eax, %ds
@@ -32,6 +34,7 @@ intr_entry:
 	leal 56(%esp), %ebp	/* Set up frame pointer. */
 
 	/* Call interrupt handler. */
+        /* 调用中断handler */
 	pushl %esp
 .globl intr_handler
 	call intr_handler
@@ -122,6 +125,7 @@ intr##NUMBER##_stub:                            \
 	.long intr##NUMBER##_stub;
 
 /* All the stubs. */
+// 所有中断的入口
 STUB(00, zero) STUB(01, zero) STUB(02, zero) STUB(03, zero)
 STUB(04, zero) STUB(05, zero) STUB(06, zero) STUB(07, zero)
 STUB(08, REAL) STUB(09, zero) STUB(0a, REAL) STUB(0b, REAL)

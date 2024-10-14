@@ -95,11 +95,13 @@ pintos_init (void)
           init_ram_pages * PGSIZE / 1024);
 
   /* Initialize memory system. */
+  /* 初始化内存系统 */
   palloc_init (user_page_limit);
   malloc_init ();
   paging_init ();
 
   /* Segmentation. */
+  //分段
 #ifdef USERPROG
   tss_init ();
   gdt_init ();
@@ -134,6 +136,31 @@ pintos_init (void)
     run_actions (argv);
   } else {
     // TODO: no command line passed to kernel. Run interactively 
+    char buf[128];
+    char prev=' ', c=' ';
+    int len;
+    len=0;
+    printf("USTCOS>");
+    while(1){
+      prev = c;
+      c = input_getc();
+      if(c==13){
+        buf[len++]='\0';
+        process_wait(process_execute(buf));
+        // run_actions (argv);
+        // run_task(argv);
+        printf("exec %s\n", buf);
+        len=0;
+        printf("USTCOS>");
+      }else{
+        if(c==0x7f&&len){
+          len--;
+        }else{
+          buf[len++]=c;
+          printf("%c", c);
+        }
+      }
+    }
   }
 
   /* Finish up. */
@@ -203,15 +230,15 @@ read_command_line (void)
   int i;
 
   argc = *(uint32_t *) ptov (LOADER_ARG_CNT);
-  p = ptov (LOADER_ARGS);
-  end = p + LOADER_ARGS_LEN;
+  p = ptov (LOADER_ARGS); //第一个参数字符串的起始位置
+  end = p + LOADER_ARGS_LEN; //参数的结束位置
   for (i = 0; i < argc; i++) 
     {
       if (p >= end)
         PANIC ("command line arguments overflow");
 
       argv[i] = p;
-      p += strnlen (p, end - p) + 1;
+      p += strnlen (p, end - p) + 1; //计算当前字符串长度并让p指向下一个字符串参数的起始位置
     }
   argv[argc] = NULL;
 
@@ -226,7 +253,6 @@ read_command_line (void)
 
   return argv;
 }
-
 /** Parses options in ARGV[]
    and returns the first non-option argument. */
 static char **

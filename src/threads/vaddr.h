@@ -21,21 +21,25 @@
 #define PGMASK  BITMASK(PGSHIFT, PGBITS)   /**< Page offset bits (0:12). */
 
 /** Offset within a page. */
+/** 页内偏移量 */
 static inline unsigned pg_ofs (const void *va) {
   return (uintptr_t) va & PGMASK;
 }
 
 /** Virtual page number. */
+/** 虚拟页号 */
 static inline uintptr_t pg_no (const void *va) {
   return (uintptr_t) va >> PGBITS;
 }
 
 /** Round up to nearest page boundary. */
+/** 向上取最近的页边界 */
 static inline void *pg_round_up (const void *va) {
   return (void *) (((uintptr_t) va + PGSIZE - 1) & ~PGMASK);
 }
 
 /** Round down to nearest page boundary. */
+/** 向下取最近的页边界 */
 static inline void *pg_round_down (const void *va) {
   return (void *) ((uintptr_t) va & ~PGMASK);
 }
@@ -50,9 +54,11 @@ static inline void *pg_round_down (const void *va) {
    space.  Up to this point in memory, user programs are allowed
    to map whatever they like.  At this point and above, the
    virtual address space belongs to the kernel. */
+/** 基址 */
 #define	PHYS_BASE ((void *) LOADER_PHYS_BASE)
 
 /** Returns true if VADDR is a user virtual address. */
+/** 判断是否是用户虚拟地址 */
 static inline bool
 is_user_vaddr (const void *vaddr) 
 {
@@ -60,6 +66,7 @@ is_user_vaddr (const void *vaddr)
 }
 
 /** Returns true if VADDR is a kernel virtual address. */
+/** 判断是否是内核虚拟地址 */
 static inline bool
 is_kernel_vaddr (const void *vaddr) 
 {
@@ -68,6 +75,7 @@ is_kernel_vaddr (const void *vaddr)
 
 /** Returns kernel virtual address at which physical address PADDR
    is mapped. */
+/** 返回物理地址PADDR映射的虚拟地址 */
 static inline void *
 ptov (uintptr_t paddr)
 {
@@ -78,6 +86,7 @@ ptov (uintptr_t paddr)
 
 /** Returns physical address at which kernel virtual address VADDR
    is mapped. */
+/** 返回内核虚拟地址VADDR映射的物理地址 **/
 static inline uintptr_t
 vtop (const void *vaddr)
 {

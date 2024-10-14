@@ -119,6 +119,26 @@ console_locked_by_current_thread (void)
           || lock_held_by_current_thread (&console_lock));
 }
 
+int console_write (int orientation UNUSED, const char *s, int n){
+  acquire_console ();
+  int i;
+  for(i=0; s[i]!='\0'&&i<n; ++i)
+    putchar_have_lock (s[i]);
+  release_console ();
+  return i+1;
+}
+int console_read (int  orientation UNUSED, char * s, int n){
+
+  int i;
+  for(i=0; i<n; ++i){
+    acquire_console ();
+    char c = input_getc();
+    release_console ();
+    if(c=='\n')return i;
+    s[i]=c;
+  }
+  return i+1;
+}
 /** The standard vprintf() function,
    which is like printf() but uses a va_list.
    Writes its output to both vga display and serial port. */
