@@ -5,7 +5,7 @@
 #include "devices/ide.h"
 #include "threads/malloc.h"
 
-/** A block device. */
+/** A block device. 块设备*/
 struct block
   {
     struct list_elem list_elem;         /**< Element in all_blocks. */
@@ -21,16 +21,17 @@ struct block
     unsigned long long write_cnt;       /**< Number of sectors written. */
   };
 
-/** List of all block devices. */
+/** List of all block devices. 所有块设备的链表*/
 static struct list all_blocks = LIST_INITIALIZER (all_blocks);
 
-/** The block block assigned to each Pintos role. */
+/** The block block assigned to each Pintos role. 分配给每个 Pintos 角色的块*/
 static struct block *block_by_role[BLOCK_ROLE_CNT];
 
 static struct block *list_elem_to_block (struct list_elem *);
 
 /** Returns a human-readable name for the given block device
    TYPE. */
+/** 返回给定块设备 TYPE 的可读名称。*/
 const char *
 block_type_name (enum block_type type)
 {
@@ -50,6 +51,7 @@ block_type_name (enum block_type type)
 
 /** Returns the block device fulfilling the given ROLE, or a null
    pointer if no block device has been assigned that role. */
+/** 返回满足给定 ROLE 的块设备，如果没有分配该角色，则返回空指针。*/
 struct block *
 block_get_role (enum block_type role)
 {
@@ -57,7 +59,7 @@ block_get_role (enum block_type role)
   return block_by_role[role];
 }
 
-/** Assigns BLOCK the given ROLE. */
+/** Assigns BLOCK the given ROLE. 分配块给指定的角色*/
 void
 block_set_role (enum block_type role, struct block *block)
 {
@@ -67,6 +69,7 @@ block_set_role (enum block_type role, struct block *block)
 
 /** Returns the first block device in kernel probe order, or a
    null pointer if no block devices are registered. */
+/** 按内核探测顺序返回第一个块设备，如果未注册块设备，则返回空指针。*/
 struct block *
 block_first (void)
 {
@@ -117,6 +120,8 @@ check_sector (struct block *block, block_sector_t sector)
    have room for BLOCK_SECTOR_SIZE bytes.
    Internally synchronizes accesses to block devices, so external
    per-block device locking is unneeded. */
+/**将扇区 SECTOR 从 BLOCK 读取到 BUFFER 中，该 BUFFER 必须
+有 BLOCK_SECTOR_SIZE 字节的空间。 */
 void
 block_read (struct block *block, block_sector_t sector, void *buffer)
 {
@@ -130,6 +135,9 @@ block_read (struct block *block, block_sector_t sector, void *buffer)
    acknowledged receiving the data.
    Internally synchronizes accesses to block devices, so external
    per-block device locking is unneeded. */
+/** 将扇区 SECTOR 写入 BUFFER 中的 BLOCK，其中必须包含 BLOCK_SECTOR_SIZE 个字节。
+ *  在块设备确认收到数据后返回。内部同步对 block 设备的访问，
+ * 因此不需要外部的 per-block device 锁定。 */
 void
 block_write (struct block *block, block_sector_t sector, const void *buffer)
 {
@@ -140,13 +148,14 @@ block_write (struct block *block, block_sector_t sector, const void *buffer)
 }
 
 /** Returns the number of sectors in BLOCK. */
+/** 返回 BLOCK 中的扇区数。 */
 block_sector_t
 block_size (struct block *block)
 {
   return block->size;
 }
 
-/** Returns BLOCK's name (e.g. "hda"). */
+/** Returns BLOCK's name (e.g. "hda"). 返回块设备的名称*/
 const char *
 block_name (struct block *block)
 {
@@ -183,6 +192,10 @@ block_print_stats (void)
    message.  The block device's SIZE in sectors and its TYPE must
    be provided, as well as the it operation functions OPS, which
    will be passed AUX in each function call. */
+/** 注册一个指定名称为NAME的新的块设备。如果 EXTRA_INFO 为非 null，
+ * 则将其作为用户消息的一部分打印出来。 
+ * 必须提供块设备的扇区大小及其 TYPE，
+ * 以及它的操作函数 OPS，该函数将在每次函数调用中传递 AUX。*/
 struct block *
 block_register (const char *name, enum block_type type,
                 const char *extra_info, block_sector_t size,
@@ -213,6 +226,7 @@ block_register (const char *name, enum block_type type,
 
 /** Returns the block device corresponding to LIST_ELEM, or a null
    pointer if LIST_ELEM is the list end of all_blocks. */
+/** 返回LIST_ELEM对应的块设备 */
 static struct block *
 list_elem_to_block (struct list_elem *list_elem)
 {

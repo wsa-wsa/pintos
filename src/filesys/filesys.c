@@ -155,6 +155,8 @@ int sys_read (int fd, char *buffer, unsigned length){
   if(!buffer||!put_user(buffer, 0)||(uint32_t)buffer >= PHYS_BASE){
     sys_exit(-1);
   }
+
+  char* buf=(char*)malloc(length*sizeof(char));
   if(fd==STDOUT_FILENO){
     // struct file *f =get_file(fd);
     // f->sw.read(STDOUT_FILENO, buffer, length);
@@ -170,8 +172,12 @@ int sys_read (int fd, char *buffer, unsigned length){
     struct file* file = get_file(fd);
     if(!file)return -1;
     lock_acquire(&filesys_lock);
-    length=file_read(file, buffer, length);
+    // read file
+    length=file_read(file, buf, length);
+
     lock_release(&filesys_lock);
+    memcpy(buffer, buf, length);
+    free(buf);
     return length;
   }
 
@@ -181,17 +187,25 @@ int sys_write (int fd, const void *buffer, unsigned length){
   if(!buffer||get_user(buffer)==-1){
     sys_exit(-1);
   }
+  char* buf=(char*)malloc(length*sizeof(char));
+  memcpy(buf, buffer, length);
+  // for(unsigned i=0; i<length; ++i){
+  //   if(get_user(buffer)==-1){
+  //     sys_exit(-1);
+  //   }
+  // }
   if(fd==STDOUT_FILENO){
-    putbuf(buffer, length);
+    putbuf(buf, length);
   }else if(fd==STDIN_FILENO){
     
   }else{
     struct file *file = get_file(fd);
     if(!file)sys_exit(-1);
-    // lock_acquire(&filesys_lock);
-    length = file_write(file, buffer, length);
-    // lock_release(&filesys_lock);
+    lock_acquire(&filesys_lock);
+    length = file_write(file, buf, length);
+    lock_release(&filesys_lock);
   }
+  free(buf);
   return length;
 }
 

@@ -7,6 +7,7 @@
 static struct intq buffer;
 
 /** Initializes the input buffer. */
+/** 初始化输出缓冲 */
 void
 input_init (void) 
 {
@@ -14,7 +15,9 @@ input_init (void)
 }
 
 /** Adds a key to the input buffer.
-   Interrupts must be off and the buffer must not be full. */
+   Interrupts must be off and the buffer must not be full. 
+   添加key到输入缓冲
+*/
 void
 input_putc (uint8_t key) 
 {
@@ -26,7 +29,9 @@ input_putc (uint8_t key)
 }
 
 /** Retrieves a key from the input buffer.
-   If the buffer is empty, waits for a key to be pressed. */
+   If the buffer is empty, waits for a key to be pressed.
+   从input检索一个key 
+   */
 uint8_t
 input_getc (void) 
 {

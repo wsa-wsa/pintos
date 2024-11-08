@@ -18,6 +18,11 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+// #ifdef VM
+#include "vm/vm.h"
+#include "vm/swap.h"
+#include "filesys/off_t.h"
+// #endif
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -62,6 +67,7 @@ process_execute (const char *args)
   // sema_init(&process_sema, 0);
   /* Create a new thread to execute FILE_NAME. */
   // lock_acquire(&process_lock);
+
   tid = thread_create (file_name, PRI_DEFAULT, start_process, &arg);
   
   // lock_release(&process_lock);
@@ -246,6 +252,31 @@ struct Elf32_Ehdr
 /** Program header.  See [ELF1] 2-2 to 2-4.
    There are e_phnum of these, starting at file offset e_phoff
    (see [ELF1] 1-6). */
+/*
+p_type: 段的类型，决定了段的用途。例如，它可以表示这是一个可加载的代码段、数据段，或者动态链接器需要的信息。常见值包括：
+
+PT_LOAD: 可加载的段。
+PT_DYNAMIC: 动态链接信息。
+PT_INTERP: 指定程序解释器路径。
+PT_NOTE: 记录附加信息。
+
+p_offset: 段在文件中的偏移量，表示从 ELF 文件开头到该段内容在文件中的字节偏移。
+
+p_vaddr: 段的虚拟地址，表示该段在内存中加载时的起始地址（通常是进程的虚拟地址空间中的地址）。
+
+p_paddr: 段的物理地址，表示该段加载到物理内存中的起始地址。
+在现代操作系统中通常被忽略，因为它们一般使用虚拟内存。
+
+p_filesz: 段在文件中的大小（以字节为单位），用于从文件中读取的内容长度。
+如果段未使用整个 p_memsz 指定的内存，剩余部分会用零填充。
+
+p_memsz: 段在内存中的大小（以字节为单位）。
+如果 p_memsz 大于 p_filesz，表示该段在加载到内存后需要分配更多空间，额外的空间一般初始化为零。
+
+p_flags: 段的标志，控制该段的权限。常见值包括：
+
+p_align: 段的对齐要求，表示该段在内存和文件中的起始地址应当符合的对齐约束。
+*/
 struct Elf32_Phdr
   {
     Elf32_Word p_type;
@@ -308,6 +339,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Read and verify executable header. */
+  /* 读取并验证可执行文件头 */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
       || ehdr.e_type != 2
@@ -321,6 +353,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Read program headers. */
+  /* 读取文件头*/
   file_ofs = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
     {
@@ -349,15 +382,21 @@ load (const char *file_name, void (**eip) (void), void **esp)
         case PT_LOAD:
           if (validate_segment (&phdr, file)) 
             {
+
               bool writable = (phdr.p_flags & PF_W) != 0;
+              /* 段在文件中的偏移量的页表项*/
               uint32_t file_page = phdr.p_offset & ~PGMASK;
+              /* 用户虚拟内存地址的页表项*/
               uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
+              /* 用户虚拟内存地址的偏移量*/
               uint32_t page_offset = phdr.p_vaddr & PGMASK;
               uint32_t read_bytes, zero_bytes;
               if (phdr.p_filesz > 0)
                 {
                   /* Normal segment.
                      Read initial part from disk and zero the rest. */
+                  /* 普通段，从磁盘中读取初始部分并将其余部分归零。*/
+                  /* 读取的字节数量*/
                   read_bytes = page_offset + phdr.p_filesz;
                   zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
                                 - read_bytes);
@@ -366,13 +405,41 @@ load (const char *file_name, void (**eip) (void), void **esp)
                 {
                   /* Entirely zero.
                      Don't read anything from disk. */
+                  /* BSS段， 不需要从磁盘中读取，直接将分配的页全部置为0 */
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              //将可执行文件的各个段加载到内存中
+#define VM
+#ifndef VM
+              //将可执行文件的各个段加载到内存中mem_page->upage
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
+#else
+
+    // pagedir_set_page(t->pagedir, mem_page, NULL, writable);
+    struct vm_eara *vma =(struct vm_eara *)malloc(sizeof(struct vm_eara));
+    vma->flags = phdr.p_flags;
+    vma->start = pg_round_down(phdr.p_vaddr);
+    vma->end   = phdr.p_vaddr+phdr.p_filesz;
+    vma->offset= pg_round_down(phdr.p_offset);
+    vma->inode = file->inode;
+    list_push_back(&t->vm_list, &vma->elem);
+    // printf("vm %p---%p off_t %p\n", vma->start, vma->end, vma->offset);
+    if(phdr.p_filesz!=phdr.p_memsz){
+      struct vm_eara *vma_bss =(struct vm_eara *)malloc(sizeof(struct vm_eara));
+      vma_bss->flags = phdr.p_flags;
+      vma_bss->start = pg_round_up(vma->end);
+      vma_bss->end   = phdr.p_vaddr + phdr.p_memsz;
+      vma_bss->inode     = NULL; 
+      vma_bss->offset    = vma->offset;
+      list_push_back(&t->vm_list, &vma_bss->elem);
+      // printf("vm_bss %p---%p off_t %p\n", vma_bss->start, vma_bss->end, vma_bss->offset);
+    }
+
+    // printf("writable %d vaddr %p---%p\n", writable, phdr.p_vaddr, phdr.p_vaddr+phdr.p_memsz);
+    
+#endif
             }
           else
             goto done;
@@ -463,36 +530,48 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
 static bool
+
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
-
-  file_seek (file, ofs);
-  while (read_bytes > 0 || zero_bytes > 0) 
+#define VM
+#ifndef VM
+    file_seek (file, ofs);
+    while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
          We will read PAGE_READ_BYTES bytes from FILE
          and zero the final PAGE_ZERO_BYTES bytes. */
+      /* 计算如何填充分配的页，每次分配PGSIZE个字节。
+         我们将会从文件中读取PGEGE_READ_BYTES个字节
+         并将后续的PAGE_ZERO_BYTES个字节填充为0。
+      */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
+      /* 获得一页内存*/
+      /* 内存不够 */
       uint8_t *kpage = palloc_get_page (PAL_USER);
       if (kpage == NULL)
         return false;
 
       /* Load this page. */
+      /* 加载给的页 */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
+          /* 分配失败直接返回false*/
           palloc_free_page (kpage);
           return false; 
         }
+      /* 并将后续的PAGE_ZERO_BYTES个字节填充为0。 */
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* Add the page to the process's address space. */
+      /* 将分配的页加入到用户内存中 */
       if (!install_page (upage, kpage, writable)) 
         {
           palloc_free_page (kpage);
@@ -500,13 +579,72 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
 
       /* Advance. */
+      // 需要读取的read_bytes和zero_bytes分别处理
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+#else
+    file_seek (file, ofs);
+    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+    struct thread * t= thread_current();
+    struct page_frame *pf = get_page_eviction(t, upage, writable);
+    pf->rw = writable;
+    ASSERT(pf->upage==upage);
+    if(swap_out(t, upage, pf->kpage));
+    else{
+      if (page_read_bytes&&file_read (file, pf->kpage, page_read_bytes) != (int) page_read_bytes)
+      {
+        palloc_free_page (pf->kpage);
+        return false;
+      }
+      memset (pf->kpage + page_read_bytes, 0, page_zero_bytes);
+    }
+    if (!install_page (upage, pf->kpage, writable)) 
+    {
+      palloc_free_page (pf->kpage);
+      return false; 
+    }
+    // struct page_table_entry* pte = pagedir_get_pte(t->pagedir, upage);
+    // struct list_elem *e = NULL;
+    // for(e=list_begin(&t->vm_list); e!=list_end(&t->vm_list); e=list_next(e)){
+    //   // struct swap_frame *sf = list_entry(e, struct swap_frame, elem);
+    //   // printf("upage: %p and bs: %d\n", sf->upage, sf->bs);
+    //   struct vm_eara* vma = list_entry(e, struct vm_eara, elem);
+    //   printf("vm %p---%p off_t %p\n", vma->start, vma->end, vma->offset);
+    // }
+#endif
+  
   return true;
 }
+// static struct ;
+bool load_vm (struct thread *t , struct vm_eara *vma, uint32_t fault_addr){
+   bool writable = (vma->flags & PF_W) != 0;
+   uint32_t v_offset    = (fault_addr - vma->start)& ~PGMASK;
+   uint32_t file_page   = vma->offset+v_offset;
+   uint32_t mem_page    = fault_addr & ~PGMASK;
+   uint32_t page_offset = fault_addr & PGMASK;
 
+  //  printf("%s' map is write %d: %p---%p\n", t->name, writable, mem_page, mem_page+PGSIZE-1);
+   uint32_t read_bytes, zero_bytes;
+   if(vma->inode){
+      read_bytes = vma->end-mem_page < PGSIZE?vma->end-mem_page:PGSIZE;
+      zero_bytes = PGSIZE-read_bytes;
+   }else{
+      read_bytes=0;
+      zero_bytes=PGSIZE;
+   }
+  //  lock_acquire(&process_lock);
+   if(!load_segment (t->exec, file_page, (void *) mem_page,
+                           read_bytes, zero_bytes, writable)){
+      return false;
+   }
+  //  lock_release(&process_lock);
+  //  thread_yield();
+   return true;
+}
+static size_t user_stack_limit = SIZE_MAX;
 /** Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
@@ -536,6 +674,7 @@ setup_stack (void **esp)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
+/** 将用户虚拟地址UPAGE对应的KPAGE（内核虚拟地址）的映射添加到页表中。*/
 static bool
 install_page (void *upage, void *kpage, bool writable)
 {
@@ -553,18 +692,13 @@ void sys_halt(void){
 }
 
 void sys_exit(int status){
-  struct thread *cur=thread_current();
+  struct thread *t=thread_current();
   if(status<-1){
     status=-1;
   }else if(status>255)status%=256;
-  cur->xstatus=status;
-  // if(cur->parent&&cur->parent->chan==cur->parent){
-  //   cur->parent->xstatus=status;
-    
-  // }
-
-  thread_wakeup(cur->parent);
-  file_close(cur->exec);
+  t->xstatus=status;
+  thread_wakeup(t->parent);
+  file_close(t->exec);
   thread_exit();
 }
 
@@ -582,8 +716,8 @@ unsigned sys_exec (const char *file){
     args[i]=file[i];
   }
   // thread_sleep(thread_current());
-  // lock_acquire(&process_lock);
+  lock_acquire(&process_lock);
   int ret = process_execute(file);
-  // lock_release(&process_lock);
+  lock_release(&process_lock);
   return ret;
 }

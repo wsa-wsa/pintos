@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 
 /** States in a thread's life cycle. */
@@ -96,13 +97,23 @@ struct thread
     int xstatus;
     struct thread *parent;
     struct file *exec;
+    struct list vm_list;
     struct file * ofile[NOFILE];
+    int brk;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
 
+#ifndef USERPROG
+#define USERPROG
+#endif
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
+    // 页目录表地址
     uint32_t *pagedir;                  /**< Page directory. */
+    struct list wpage_list;
+    struct list rpage_list;
+    struct hash swap_table;
 #endif
 
     /* Owned by thread.c. */

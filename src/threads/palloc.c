@@ -181,3 +181,9 @@ page_from_pool (const struct pool *pool, void *page)
 
   return page_no >= start_page && page_no < end_page;
 }
+
+bool
+page_from_user (void *page) 
+{
+  return page_from_pool(&user_pool, page);
+}

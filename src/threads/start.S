@@ -137,7 +137,7 @@ start:
 # relocations.
 
 	data32 addr32 lgdt gdtdesc - LOADER_PHYS_BASE - 0x20000
-
+//CR寄存器位设置
 # Then we turn on the following bits in CR0:
 #    PE (Protect Enable): this turns on protected mode.
 #    PG (Paging): turns on paging.

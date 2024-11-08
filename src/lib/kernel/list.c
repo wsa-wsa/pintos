@@ -180,6 +180,9 @@ list_insert (struct list_elem *before, struct list_elem *elem)
 /** Removes elements FIRST though LAST (exclusive) from their
    current list, then inserts them just before BEFORE, which may
    be either an interior element or a tail. */
+/**
+ * 将从FIRST到LAST(不包括LAST)的元素插入到BEFORE之前(BEFORE可能是内部元素或尾部元素)
+ */
 void
 list_splice (struct list_elem *before,
              struct list_elem *first, struct list_elem *last)

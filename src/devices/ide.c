@@ -502,7 +502,7 @@ select_device_wait (const struct ata_disk *d)
   wait_until_idle (d);
 }
 
-/** ATA interrupt handler. */
+/** ATA interrupt handler. ATA 中断处理进程。*/
 static void
 interrupt_handler (struct intr_frame *f) 
 {

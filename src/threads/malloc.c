@@ -61,6 +61,7 @@ struct block
   };
 
 /** Our set of descriptors. */
+// 设备文件表(设备文件描述符)
 static struct desc descs[10];   /**< Descriptors. */
 static size_t desc_cnt;         /**< Number of descriptors. */
 
@@ -85,7 +86,9 @@ malloc_init (void)
 }
 
 /** Obtains and returns a new block of at least SIZE bytes.
-   Returns a null pointer if memory is not available. */
+   Returns a null pointer if memory is not available.
+    获得并返回一个至少SIZE字节的块
+   */
 void *
 malloc (size_t size) 
 {

@@ -62,6 +62,8 @@ byte_cnt (size_t bit_cnt)
 
 /** Returns a bit mask in which the bits actually used in the last
    element of B's bits are set to 1 and the rest are set to 0. */
+/** 返回一个位掩码，
+ * 其中 B 位的最后一个元素中实际使用的位设置为 1，其余位设置为 0。 */
 static inline elem_type
 last_mask (const struct bitmap *b) 
 {
@@ -316,6 +318,9 @@ bitmap_scan (const struct bitmap *b, size_t start, size_t cnt, bool value)
    If CNT is zero, returns 0.
    Bits are set atomically, but testing bits is not atomic with
    setting them. */
+/** 在 START 或之后的 B 中找到第一组 CNT 连续位，这些位都设置为 VALUE，
+ * 将它们全部翻转为 ！VALUE，并返回组中第一位的索引。如果没有这样的组，
+ * 则返回 BITMAP_ERROR。如果 CNT 为零，则返回 0。 */
 size_t
 bitmap_scan_and_flip (struct bitmap *b, size_t start, size_t cnt, bool value)
 {

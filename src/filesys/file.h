@@ -11,7 +11,7 @@ struct devsw {
 /** An open file. */
 struct file 
   {
-    struct inode *inode;        /**< File's inode. */
+    struct inode *inode;        /**< File's inode. 文件的inode指针*/
     off_t pos;                  /**< Current position. */
     bool deny_write;            /**< Has file_deny_write() been called? */
     // enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type; /*文件类型*/

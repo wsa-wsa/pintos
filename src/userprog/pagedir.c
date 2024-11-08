@@ -5,6 +5,9 @@
 #include "threads/init.h"
 #include "threads/pte.h"
 #include "threads/palloc.h"
+#include "devices/block.h"
+#include "kernel/hash.h"
+#include "vm/vm.h"
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
@@ -55,7 +58,7 @@ pagedir_destroy (uint32_t *pd)
    on CREATE.  If CREATE is true, then a new page table is
    created and a pointer into it is returned.  Otherwise, a null
    pointer is returned. */
-/** 返回VADDR的页面入口PD */
+/** 返回页目录PD中虚拟地址VADDR的页表项的地址。也就是页目录表对应的page_entry*/
 static uint32_t *
 lookup_page (uint32_t *pd, const void *vaddr, bool create)
 {
@@ -64,19 +67,21 @@ lookup_page (uint32_t *pd, const void *vaddr, bool create)
   ASSERT (pd != NULL);
 
   /* Shouldn't create new kernel virtual mappings. */
+  /* 不能创建新的内核映射*/
   ASSERT (!create || is_user_vaddr (vaddr));
 
   /* Check for a page table for VADDR.
      If one is missing, create one if requested. */
+  /* 获得页目录项地址 */
   pde = pd + pd_no (vaddr);
-  if (*pde == 0) 
+  if (*pde == 0) //表示 pde 未分配页表
     {
       if (create)
         {
           pt = palloc_get_page (PAL_ZERO);
           if (pt == NULL) 
             return NULL; 
-      
+          // 将pde表项（页目录项）内容映射到分配的pt页框并添加部分信息
           *pde = pde_create (pt);
         }
       else
@@ -84,7 +89,9 @@ lookup_page (uint32_t *pd, const void *vaddr, bool create)
     }
 
   /* Return the page table entry. */
+  /* 返回页表入口地址 */
   pt = pde_get_pt (*pde);
+  /* 返回页表目录项地址 */
   return &pt[pt_no (vaddr)];
 }
 
@@ -98,6 +105,7 @@ lookup_page (uint32_t *pd, const void *vaddr, bool create)
    otherwise it is read-only.
    Returns true if successful, false if memory allocation
    failed. */
+/** 在页目录PD中添加用户虚拟页面UPAGE到内核虚拟地址KPAGE标识的物理帧的映射。*/
 bool
 pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
 {
@@ -125,6 +133,7 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
    address UADDR in PD.  Returns the kernel virtual address
    corresponding to that physical address, or a null pointer if
    UADDR is unmapped. */
+/**查找页目录PD中用户虚拟地址UADDR对应的物理地址。 */
 void *
 pagedir_get_page (uint32_t *pd, const void *uaddr) 
 {
@@ -139,6 +148,14 @@ pagedir_get_page (uint32_t *pd, const void *uaddr)
     return NULL;
 }
 
+void *
+pagedir_get_pte(uint32_t *pd, const void *uaddr){
+  return lookup_page (pd, uaddr, false);
+}
+void *
+pagedir_get_pde(uint32_t *pd, const void *uaddr){
+  return pd + pd_no (uaddr);
+}
 /** Marks user virtual page UPAGE "not present" in page
    directory PD.  Later accesses to the page will fault.  Other
    bits in the page table entry are preserved.
@@ -264,4 +281,13 @@ invalidate_pagedir (uint32_t *pd)
          "Translation Lookaside Buffers (TLBs)". */
       pagedir_activate (pd);
     } 
+}
+
+bool set_pagedir(uint32_t *pd, const void *upage, bool writeable, bool persent){
+  uint32_t* pt  = pd+pd_no(upage);
+  uint32_t* pte = lookup_page(pd, upage, true);
+  if(writeable)*pte|= PTE_W;
+  if(persent)*pte |= PTE_P;
+  *pte|= PTE_U;
+  return true;
 }

@@ -11,11 +11,15 @@
 #define BLOCK_SECTOR_SIZE 512
 
 /** Index of a block device sector.
-   Good enough for devices up to 2 TB. */
+   Good enough for devices up to 2 TB. 
+    块设备的索引
+   */
 typedef uint32_t block_sector_t;
 
 /** Format specifier for printf(), e.g.:
-   printf ("sector=%"PRDSNu"\n", sector); */
+   printf ("sector=%"PRDSNu"\n", sector); 
+   
+    */
 #define PRDSNu PRIu32
 
 /** Higher-level interface for file systems, etc. */
@@ -23,6 +27,7 @@ typedef uint32_t block_sector_t;
 struct block;
 
 /** Type of a block device. */
+// 块设备类型
 enum block_type
   {
     /* Block device types that play a role in Pintos. */
@@ -60,7 +65,7 @@ enum block_type block_type (struct block *);
 void block_print_stats (void);
 
 /** Lower-level interface to block device drivers. */
-
+// 块设备驱动的低级接口
 struct block_operations
   {
     void (*read) (void *aux, block_sector_t, void *buffer);

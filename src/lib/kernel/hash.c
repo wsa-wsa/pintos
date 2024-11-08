@@ -128,6 +128,8 @@ hash_replace (struct hash *h, struct hash_elem *new)
 
 /** Finds and returns an element equal to E in hash table H, or a
    null pointer if no equal element exists in the table. */
+/** 在哈希表 H 中查找并返回等于 E 的元素，如果表中不存在相等的元素，
+ * 则返回空指针。*/
 struct hash_elem *
 hash_find (struct hash *h, struct hash_elem *e) 
 {

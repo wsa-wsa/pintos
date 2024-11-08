@@ -72,7 +72,11 @@ is_kernel_vaddr (const void *vaddr)
 {
   return vaddr >= PHYS_BASE;
 }
-
+#define RLIMIT_STACK 4
+static inline bool
+is_stack_vaddr (const void *vaddr){
+  return vaddr >= PHYS_BASE&&vaddr <= PHYS_BASE + RLIMIT_STACK * PGSIZE;
+}
 /** Returns kernel virtual address at which physical address PADDR
    is mapped. */
 /** 返回物理地址PADDR映射的虚拟地址 */

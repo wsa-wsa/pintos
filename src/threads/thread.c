@@ -15,6 +15,7 @@
 #include "userprog/process.h"
 #include "lib/kernel/console.h"
 #include "filesys/file.h"
+#include "vm/swap.h"
 #endif
 
 /** Random value for struct thread's `magic' member.
@@ -212,6 +213,10 @@ thread_create (const char *name, int priority,
   t->ofile[STDIN_FILENO]=&stdio;
   t->ofile[STDOUT_FILENO]=&stdio;
   t->exec = NULL;
+  list_init(&t->vm_list);
+  list_init(&t->wpage_list);
+  list_init(&t->rpage_list);
+  swap_table_init(&t->swap_table);
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -624,11 +629,12 @@ thread_schedule_tail (struct thread *prev)
      pull out the rug under itself.  (We don't free
      initial_thread because its memory was not obtained via
      palloc().) */
-  // if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
-  //   {
-  //     ASSERT (prev != cur);
-  //     palloc_free_page (prev);
-  //   }
+  if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
+    {
+      free_page_frame(prev);
+      free_swap_frame(prev);
+      // palloc_free_page (prev);
+    }
 }
 
 /** Schedules a new process.  At entry, interrupts must be off and

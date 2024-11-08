@@ -29,11 +29,13 @@
 #define PDMASK  BITMASK(PDSHIFT, PDBITS)   /**< Page directory bits (22:31). */
 
 /** Obtains page table index from a virtual address. */
+/** 从虚拟地址中获取页表索引。 */
 static inline unsigned pt_no (const void *va) {
   return ((uintptr_t) va & PTMASK) >> PTSHIFT;
 }
 
 /** Obtains page directory index from a virtual address. */
+/** 从虚拟地址获取页面目录索引。 */
 static inline uintptr_t pd_no (const void *va) {
   return (uintptr_t) va >> PDSHIFT;
 }
@@ -68,6 +70,7 @@ static inline uintptr_t pd_no (const void *va) {
 #define PTE_D 0x40              /**< 1=dirty, 0=not dirty (PTEs only). */
 
 /** Returns a PDE that points to page table PT. */
+/** 返回指向页表 PT 的 PDE。 */
 static inline uint32_t pde_create (uint32_t *pt) {
   ASSERT (pg_ofs (pt) == 0);
   return vtop (pt) | PTE_U | PTE_P | PTE_W;

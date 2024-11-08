@@ -8,13 +8,15 @@
 #include "threads/malloc.h"
 
 /** Identifies an inode. */
+/** 识别inode的魔数 */
 #define INODE_MAGIC 0x494e4f44
 
-/** On-disk inode.
+/** On-disk inode.在磁盘上的inode，长度必须正好为 BLOCK_SECTOR_SIZE 字节。
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+/** 在磁盘上采用顺序存储的方式进行数据的存储 */
 struct inode_disk
   {
-    block_sector_t start;               /**< First data sector. */
+    block_sector_t start;               /**< First data sector. 起始块扇区号*/
     off_t length;                       /**< File size in bytes. */
     unsigned magic;                     /**< Magic number. */
     uint32_t unused[125];               /**< Not used. */
@@ -22,6 +24,7 @@ struct inode_disk
 
 /** Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
+/** 返回要为 inode 分配的SIZE字节长度需要分配的扇区数。*/
 static inline size_t
 bytes_to_sectors (off_t size)
 {
@@ -33,17 +36,21 @@ bytes_to_sectors (off_t size)
 struct inode 
   {
     struct list_elem elem;              /**< Element in inode list. */
-    block_sector_t sector;              /**< Sector number of disk location. */
+    block_sector_t sector;              /**< Sector number of disk location. 所处的扇区号*/
     int open_cnt;                       /**< Number of openers. */
     bool removed;                       /**< True if deleted, false otherwise. */
     int deny_write_cnt;                 /**< 0: writes ok, >0: deny writes. */
-    struct inode_disk data;             /**< Inode content. */
+    struct inode_disk data;             /**< Inode content. inode的内容*/
+    // struct inode_disk表示的是disk中一块连续的区域
   };
 
 /** Returns the block device sector that contains byte offset POS
    within INODE.
    Returns -1 if INODE does not contain data for a byte at offset
    POS. */
+/**
+ *  返回块设备扇区号
+ */
 static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
@@ -70,6 +77,7 @@ inode_init (void)
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
+/** 使用 LENGTH 字节的数据初始化inode，并将新 inode 写入文档系统设备上的扇区SECTOR。 */
 bool
 inode_create (block_sector_t sector, off_t length)
 {
@@ -109,6 +117,7 @@ inode_create (block_sector_t sector, off_t length)
 /** Reads an inode from SECTOR
    and returns a `struct inode' that contains it.
    Returns a null pointer if memory allocation fails. */
+/** 从扇区中读取一个inode，并返回一个struct inode结构体*/
 struct inode *
 inode_open (block_sector_t sector)
 {
@@ -132,17 +141,19 @@ inode_open (block_sector_t sector)
   if (inode == NULL)
     return NULL;
 
-  /* Initialize. */
+  /* Initialize. 初始化inode*/
   list_push_front (&open_inodes, &inode->elem);
   inode->sector = sector;
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
+  //从块设备中读取数据，fs_device为块设备， inode->sector为扇区号， inode->data为数据
   block_read (fs_device, inode->sector, &inode->data);
   return inode;
 }
 
 /** Reopens and returns INODE. */
+/** 重新打开并返回inode */
 struct inode *
 inode_reopen (struct inode *inode)
 {
@@ -152,6 +163,7 @@ inode_reopen (struct inode *inode)
 }
 
 /** Returns INODE's inode number. */
+/** 返回INODE的inode扇区号 */
 block_sector_t
 inode_get_inumber (const struct inode *inode)
 {
@@ -198,6 +210,7 @@ inode_remove (struct inode *inode)
 /** Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
    Returns the number of bytes actually read, which may be less
    than SIZE if an error occurs or end of file is reached. */
+/** 从inode中读取SIZE比特到BUFFER中，从位置 OFFSET 开始 */
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
 {
@@ -208,8 +221,9 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   while (size > 0) 
     {
       /* Disk sector to read, starting byte offset within sector. */
-      block_sector_t sector_idx = byte_to_sector (inode, offset);
-      int sector_ofs = offset % BLOCK_SECTOR_SIZE;
+      /* 磁盘扇区读取， 从offset开始读取*/
+      block_sector_t sector_idx = byte_to_sector (inode, offset); //获取扇区号
+      int sector_ofs = offset % BLOCK_SECTOR_SIZE;                //扇区偏移
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
       off_t inode_left = inode_length (inode) - offset;

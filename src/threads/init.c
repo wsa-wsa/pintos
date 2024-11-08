@@ -31,6 +31,13 @@
 #else
 #include "tests/threads/tests.h"
 #endif
+// #ifndef FILESYS
+// #define FILESYS
+// #endif
+// #ifndef VM
+// #define VM
+// #endif
+
 #ifdef FILESYS
 #include "devices/block.h"
 #include "devices/ide.h"
@@ -128,7 +135,8 @@ pintos_init (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
-
+#include "vm/swap.h"
+  free_swap_map_init();
   printf ("Boot complete.\n");
   
   if (*argv != NULL) {
