@@ -99,7 +99,7 @@ struct thread
     struct file *exec;
     struct list vm_list;
     struct file * ofile[NOFILE];
-    int brk;
+    uint32_t esp;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
 

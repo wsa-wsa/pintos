@@ -1,7 +1,8 @@
 #include "vm/vm.h"
 #include "vm/swap.h"
 #include "threads/pte.h"
-
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 void
 free_swap_map_init (void) 
 {
@@ -87,6 +88,26 @@ struct swap_frame* find_swap(struct hash *ht, uint32_t upage){
   return NULL;
 }
 
+void remove_swap(struct vm_eara *vma, struct hash *ht){
+  if(vma->file==NULL)return;
+  uint8_t *kpage = malloc(PGSIZE);
+  for(uint32_t upage=vma->start; upage<vma->end; upage+=PGSIZE){
+    struct swap_frame * sf = find_swap(ht, upage);
+    if(sf!=NULL){
+        read_sawp(sf->bs, kpage, PGSIZE);
+        file_seek(vma->file, upage-vma->start+vma->offset);
+        off_t size = vma->end - upage>PGSIZE?PGSIZE:vma->end-upage;
+        file_write(vma->file, kpage, size);
+        int count = (PGSIZE+BLOCK_SECTOR_SIZE-1)/BLOCK_SECTOR_SIZE;
+        ASSERT (bitmap_all (free_swap_map, sf->bs, count));
+        bitmap_set_multiple (free_swap_map, sf->bs, count, false);
+        hash_delete(ht, &sf->elem);
+        free(sf);
+    }
+  }
+  free(kpage);
+}
+
 bool swap_out(struct thread * t, uint32_t upage, uint32_t kpage){
   struct swap_frame *sf = find_swap(&t->swap_table, upage);
   if(!sf)return false;
@@ -96,6 +117,12 @@ void swap_in(struct thread * t, uint32_t upage, uint32_t kpage){
   struct page_table_entry* pte = pagedir_get_pte(t->pagedir, upage);
   if(pte==NULL||!pte->dirty)return;
   // printf("write upage: %p --- %p\n", upage, upage+PGSIZE-1);
+  struct vm_eara *vma = find_vma(&t->vm_list, upage);
+  if(vma->file!=NULL&&vma->file->inode!=t->exec->inode){
+    file_seek(vma->file, upage-vma->start+vma->offset);
+    off_t size = vma->end - upage>PGSIZE?PGSIZE:vma->end-upage;
+    file_write(vma->file, kpage, size);
+  }
   //该页是脏页
   struct swap_frame * sf = NULL;
 
@@ -106,7 +133,7 @@ void swap_in(struct thread * t, uint32_t upage, uint32_t kpage){
     return;
   }
   //脏页在swap空间无备份，进行备份
-  sf = (struct swap_frame *)malloc(sizeof(struct swap_frame));
+  sf = (struct swap_frame *)malloc(sizeof(*sf));
   sf->bs    = write_swap(kpage, PGSIZE);
   sf->upage = upage;
   // list_push_back(&t->swap_list, &sf->elem);

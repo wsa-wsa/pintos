@@ -129,13 +129,14 @@ inode_open (block_sector_t sector)
        e = list_next (e)) 
     {
       inode = list_entry (e, struct inode, elem);
+      //如果inode已经打开，增加inode引用计数
       if (inode->sector == sector) 
         {
           inode_reopen (inode);
           return inode; 
         }
     }
-
+  //inode第一次打开，创建inode
   /* Allocate memory. */
   inode = malloc (sizeof *inode);
   if (inode == NULL)

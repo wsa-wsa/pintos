@@ -346,7 +346,11 @@ intr_handler (struct intr_frame *frame)
 {
   bool external;
   intr_handler_func *handler;
-
+  bool is_user_tarp;
+  is_user_tarp = (frame->cs&0x3)==0x3;
+  if(is_user_tarp){
+    thread_current()->esp =frame->esp ;
+  }
   /* External interrupts are special.
      We only handle one at a time (so interrupts must be off)
      and they need to be acknowledged on the PIC (see below).
@@ -373,7 +377,9 @@ intr_handler (struct intr_frame *frame)
     }
   else
     unexpected_interrupt (frame);
-
+  if(is_user_tarp){
+    thread_current()->esp = 0;
+  }
   /* Complete the processing of an external interrupt. */
   if (external) 
     {

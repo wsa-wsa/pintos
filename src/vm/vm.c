@@ -4,6 +4,8 @@
 #include "devices/block.h"
 #include "threads/palloc.h"
 #include "lib/kernel/bitmap.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 #include "vm/swap.h"
 void flush_tlb(uint32_t upage)
 {
@@ -72,7 +74,7 @@ struct page_frame* page_eviction(struct list* list, uint32_t* pd, bool writable)
       if (kpage == NULL){
         return get_page(list, pd, writable);
       }
-      struct page_frame* pf=(struct page_frame*)malloc(sizeof(struct page_frame));
+      struct page_frame* pf=(struct page_frame*)malloc(sizeof(*pf));
       pf->kpage            = kpage;
       pf->upage            = 0;
       list_push_back(list, &pf->elem);
@@ -110,12 +112,33 @@ struct vm_eara* find_vma(struct list* list, uint32_t upage){
   return NULL;
 }
 
-void free_page_frame(struct thread *t){
+void free_vm(struct thread * t){
+    while (!list_empty(&t->wpage_list)) {
+      struct list_elem *e = list_pop_front(&t->wpage_list);  // 获取并移除第一个元素
+      struct page_frame *pf = list_entry(e, struct page_frame, elem);  // 转换为实际数据类型
+      struct page_table_entry* pte = pagedir_get_pte(t->pagedir, pf->upage);
+      struct vm_eara *vma = pf->vma;
+      if(vma!=NULL&&vma->file!=NULL&&vma->file->inode!=t->exec->inode&&pte->dirty){
+        file_seek(vma->file, pf->upage-vma->start+vma->offset);
+        off_t size = vma->end - (off_t)pf->upage>PGSIZE?PGSIZE:vma->end-(off_t)pf->upage;
+        file_write(vma->file, pf->kpage, size);
+      }
+      free(pf);  // 释放数据结构内存
+  }
 
+}
+
+void free_page_frame(struct thread *t){
   while (!list_empty(&t->wpage_list)) {
       struct list_elem *e = list_pop_front(&t->wpage_list);  // 获取并移除第一个元素
       struct page_frame *pf = list_entry(e, struct page_frame, elem);  // 转换为实际数据类型
-      // palloc_free_page(pf->kpage);
+      struct page_table_entry* pte = pagedir_get_pte(t->pagedir, pf->upage);
+      struct vm_eara *vma = pf->vma;
+      if(vma!=NULL&&vma->file!=NULL&&vma->file->inode!=t->exec->inode){
+        file(vma->file, pf->upage-vma->start+vma->offset);
+        off_t size = vma->end - (off_t)pf->upage>PGSIZE?PGSIZE:vma->end-(off_t)pf->upage;
+        file_write(vma->file, pf->kpage, size);
+      }
       free(pf);  // 释放数据结构内存
   }
   while (!list_empty(&t->rpage_list)) {
@@ -124,4 +147,66 @@ void free_page_frame(struct thread *t){
       // palloc_free_page(pf->kpage);
       free(pf);  // 释放数据结构内存
   }
+}
+
+void free_vma(struct thread *t){
+    while (!list_empty(&t->vm_list)) {
+      struct list_elem *e = list_pop_front(&t->vm_list);  // 获取并移除第一个元素
+      struct vm_eara *vma = list_entry(e, struct vm_eara, elem);  // 转换为实际数据类型
+      // palloc_free_page(pf->kpage);
+      file_close(vma->file);
+      free(vma);  // 释放数据结构内存
+  }
+}
+mapid_t sys_mmap (int fd, void *addr){
+  if(pg_ofs(addr)!=0||addr==0||is_stack_vaddr(addr))return -1;
+  struct vm_eara * vma = NULL;
+  struct thread * t = thread_current();
+  vma = find_vma(&t->vm_list, addr);
+  if(vma!=NULL)return -1;
+  struct file * file = get_file(fd);
+  vma = (struct vm_eara *)malloc(sizeof(*vma));
+  vma->start = pg_round_down(addr);
+  vma->end   = vma->start+file_length(file);
+  vma->offset= 0;
+  vma->inode = file->inode;
+  vma->file  = file_reopen(file);
+  vma->flags = file->deny_write?0:2;
+  list_push_back(&t->vm_list, &vma->elem);
+  return vma->start;
+}
+void sys_munmap (mapid_t mapping){
+  struct thread * t = thread_current();
+  struct vm_eara * vma = find_vma(&t->vm_list, mapping);
+  if(vma==NULL)return;
+  struct list_elem * e= NULL;
+  for(e=list_begin(&t->wpage_list); e!=list_end(&t->wpage_list); ){
+    struct page_frame* pf = list_entry(e, struct page_frame, elem);
+    if(pf->upage>=vma->start&&pf->upage<vma->end){
+      struct page_table_entry* pte = pagedir_get_pte(t->pagedir, pf->upage);
+      if(vma->file!=NULL&&pte->dirty){
+        file_seek(vma->file, pf->upage-vma->start+vma->offset);
+        off_t size = vma->end - (off_t)pf->upage>PGSIZE?PGSIZE:vma->end-(off_t)pf->upage;
+        file_write(vma->file, pf->kpage, size);
+      }
+      pte->present = 0;
+      flush_tlb(pf->upage);
+      e=list_remove(e);
+      free(pf);
+    }else e=list_next(e);
+  }
+  for(e=list_begin(&t->rpage_list); e!=list_end(&t->rpage_list); ){
+    struct page_frame* pf = list_entry(e, struct page_frame, elem);
+    if(pf->upage>=vma->start&&pf->upage<vma->end){
+      struct page_table_entry* pte = pagedir_get_pte(t->pagedir, pf->upage);
+      pte->present = 0;
+      flush_tlb(pf->upage);
+      e=list_remove(e);
+      free(pf);
+    }else e=list_next(e);
+  }
+  file_close(vma->file);
+  list_remove(&vma->elem);
+  free(vma);
+  // return true;
 }

@@ -26,6 +26,8 @@ file_open (struct inode *inode)
 
 /** Opens and returns a new file for the same inode as FILE.
    Returns a null pointer if unsuccessful. */
+/** 打开并返回与 FILE 相同的 inode 的新文件。
+  如果不成功，则返回 null 指针。 */
 struct file *
 file_reopen (struct file *file) 
 {

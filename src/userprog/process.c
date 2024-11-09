@@ -306,7 +306,7 @@ struct Elf32_Phdr
 
 static bool setup_stack (void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
-static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
+static bool load_segment (void * vm, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
 
@@ -418,20 +418,22 @@ load (const char *file_name, void (**eip) (void), void **esp)
 #else
 
     // pagedir_set_page(t->pagedir, mem_page, NULL, writable);
-    struct vm_eara *vma =(struct vm_eara *)malloc(sizeof(struct vm_eara));
+    struct vm_eara *vma =(struct vm_eara *)malloc(sizeof(*vma));
     vma->flags = phdr.p_flags;
     vma->start = pg_round_down(phdr.p_vaddr);
     vma->end   = phdr.p_vaddr+phdr.p_filesz;
     vma->offset= pg_round_down(phdr.p_offset);
-    vma->inode = file->inode;
+    // vma->inode = file->inode;
+    vma->file  = file_reopen(file);
+    // file_close(file);
     list_push_back(&t->vm_list, &vma->elem);
     // printf("vm %p---%p off_t %p\n", vma->start, vma->end, vma->offset);
     if(phdr.p_filesz!=phdr.p_memsz){
-      struct vm_eara *vma_bss =(struct vm_eara *)malloc(sizeof(struct vm_eara));
+      struct vm_eara *vma_bss =(struct vm_eara *)malloc(sizeof(*vma_bss));
       vma_bss->flags = phdr.p_flags;
       vma_bss->start = pg_round_up(vma->end);
       vma_bss->end   = phdr.p_vaddr + phdr.p_memsz;
-      vma_bss->inode     = NULL; 
+      vma_bss->file     = NULL; 
       vma_bss->offset    = vma->offset;
       list_push_back(&t->vm_list, &vma_bss->elem);
       // printf("vm_bss %p---%p off_t %p\n", vma_bss->start, vma_bss->end, vma_bss->offset);
@@ -531,7 +533,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    or disk read error occurs. */
 static bool
 
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
+load_segment (void * vm, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
@@ -539,6 +541,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (ofs % PGSIZE == 0);
 #define VM
 #ifndef VM
+    struct file *file = (struct file *)vm;
     file_seek (file, ofs);
     while (read_bytes > 0 || zero_bytes > 0) 
     {
@@ -585,27 +588,32 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       upage += PGSIZE;
     }
 #else
-    file_seek (file, ofs);
-    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+    // size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    // size_t page_zero_bytes = PGSIZE - page_read_bytes;
+    struct vm_eara *vma = (struct vm_eara *)vm;
     struct thread * t= thread_current();
     struct page_frame *pf = get_page_eviction(t, upage, writable);
-    pf->rw = writable;
+    // pf->rw = writable;
     ASSERT(pf->upage==upage);
     if(swap_out(t, upage, pf->kpage));
     else{
-      if (page_read_bytes&&file_read (file, pf->kpage, page_read_bytes) != (int) page_read_bytes)
-      {
-        palloc_free_page (pf->kpage);
-        return false;
+      if(read_bytes){
+        file_seek (vma->file, ofs);
+        if (file_read (vma->file, pf->kpage, read_bytes) != (int) read_bytes)
+        {
+          palloc_free_page (pf->kpage);
+          return false;
+        }
       }
-      memset (pf->kpage + page_read_bytes, 0, page_zero_bytes);
+      memset (pf->kpage + read_bytes, 0, zero_bytes);
     }
     if (!install_page (upage, pf->kpage, writable)) 
     {
       palloc_free_page (pf->kpage);
       return false; 
     }
+    pf->vma = vm;
+
     // struct page_table_entry* pte = pagedir_get_pte(t->pagedir, upage);
     // struct list_elem *e = NULL;
     // for(e=list_begin(&t->vm_list); e!=list_end(&t->vm_list); e=list_next(e)){
@@ -628,7 +636,7 @@ bool load_vm (struct thread *t , struct vm_eara *vma, uint32_t fault_addr){
 
   //  printf("%s' map is write %d: %p---%p\n", t->name, writable, mem_page, mem_page+PGSIZE-1);
    uint32_t read_bytes, zero_bytes;
-   if(vma->inode){
+   if(vma->file){
       read_bytes = vma->end-mem_page < PGSIZE?vma->end-mem_page:PGSIZE;
       zero_bytes = PGSIZE-read_bytes;
    }else{
@@ -636,7 +644,7 @@ bool load_vm (struct thread *t , struct vm_eara *vma, uint32_t fault_addr){
       zero_bytes=PGSIZE;
    }
   //  lock_acquire(&process_lock);
-   if(!load_segment (t->exec, file_page, (void *) mem_page,
+   if(!load_segment (vma, file_page, (void *) mem_page,
                            read_bytes, zero_bytes, writable)){
       return false;
    }
@@ -644,7 +652,21 @@ bool load_vm (struct thread *t , struct vm_eara *vma, uint32_t fault_addr){
   //  thread_yield();
    return true;
 }
-static size_t user_stack_limit = SIZE_MAX;
+
+struct vm_eara * alloc_stack(struct thread *t, uint32_t vaddr){
+  struct vm_eara *vma = (struct vm_eara *)malloc(sizeof(*vma));
+  vma->start = pg_round_down(vaddr);
+  vma->end   = pg_round_up(vaddr);
+  vma->file  = NULL;
+  vma->offset= 0;
+  vma->flags = PF_W;
+  list_push_back(&t->vm_list, &vma->elem);
+  return vma;
+}
+bool is_stack_push_vaddr (struct thread *t, bool user, const void* vaddr){
+  if(!user)return false;
+  return vaddr+4==t->esp||vaddr+32==t->esp;
+}
 /** Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
@@ -698,12 +720,14 @@ void sys_exit(int status){
   }else if(status>255)status%=256;
   t->xstatus=status;
   thread_wakeup(t->parent);
+  // intr_disable();
+  free_page_frame(t);
   file_close(t->exec);
+  // intr_enable();
   thread_exit();
 }
 
 int sys_wait (tid_t tid){
-  
   return process_wait(tid);
 }
 unsigned sys_exec (const char *file){

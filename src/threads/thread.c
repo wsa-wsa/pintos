@@ -213,6 +213,7 @@ thread_create (const char *name, int priority,
   t->ofile[STDIN_FILENO]=&stdio;
   t->ofile[STDOUT_FILENO]=&stdio;
   t->exec = NULL;
+  t->esp  = 0;
   list_init(&t->vm_list);
   list_init(&t->wpage_list);
   list_init(&t->rpage_list);
@@ -631,7 +632,6 @@ thread_schedule_tail (struct thread *prev)
      palloc().) */
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
-      free_page_frame(prev);
       free_swap_frame(prev);
       // palloc_free_page (prev);
     }

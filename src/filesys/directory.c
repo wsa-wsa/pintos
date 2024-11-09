@@ -84,6 +84,7 @@ dir_get_inode (struct dir *dir)
 }
 
 /** Searches DIR for a file with the given NAME.
+ * 在 DIR 中搜索具有给定 NAME 的文件。
    If successful, returns true, sets *EP to the directory entry
    if EP is non-null, and sets *OFSP to the byte offset of the
    directory entry if OFSP is non-null.
@@ -113,6 +114,8 @@ lookup (const struct dir *dir, const char *name,
 
 /** Searches DIR for a file with the given NAME
    and returns true if one exists, false otherwise.
+   在 DIR 中搜索具有给定 NAME 的文件，
+   如果存在，则返回 true，否则返回 false。
    On success, sets *INODE to an inode for the file, otherwise to
    a null pointer.  The caller must close *INODE. */
 bool

@@ -14,7 +14,7 @@ struct block *fs_device;
 
 struct lock filesys_lock;
 static void do_format (void);
-
+static struct file * sys_openfile_tabel[SYS_OFILE_SIZE];
 /** Initializes the file system module.
    If FORMAT is true, reformats the file system. */
 void
@@ -62,6 +62,7 @@ filesys_create (const char *name, off_t initial_size)
 }
 
 /** Opens the file with the given NAME.
+ * 打开具有给定 NAME 的文件
    Returns the new file if successful or a null pointer
    otherwise.
    Fails if no file named NAME exists,
@@ -128,7 +129,13 @@ bool sys_create (const char *file, unsigned initial_size){
   if(!file||get_user(file)==-1){
     sys_exit(-1);
   }
-  return filesys_create(file, initial_size);
+
+  lock_acquire(&filesys_lock);
+  // lock_try_acquire(&filesys_lock);
+  bool ret = filesys_create(file, initial_size);
+  lock_release(&filesys_lock);
+
+  return ret;
 }
 
 bool sys_remove (const char *file){
@@ -139,8 +146,10 @@ int sys_open (const char *file){
   if(!file||get_user(file)==-1){
     sys_exit(-1);
   }
+  // lock_acquire(&filesys_lock);
   struct file * f = filesys_open(file);
-  if(!f)return -1;
+  // lock_release(&filesys_lock);
+  if(f==NULL)return -1;
   int fd = get_fd(f);
   return fd;
 }
@@ -189,11 +198,7 @@ int sys_write (int fd, const void *buffer, unsigned length){
   }
   char* buf=(char*)malloc(length*sizeof(char));
   memcpy(buf, buffer, length);
-  // for(unsigned i=0; i<length; ++i){
-  //   if(get_user(buffer)==-1){
-  //     sys_exit(-1);
-  //   }
-  // }
+
   if(fd==STDOUT_FILENO){
     putbuf(buf, length);
   }else if(fd==STDIN_FILENO){
@@ -225,5 +230,6 @@ void sys_close (int fd){
   }
   struct file *file=get_file(fd);
   remove_fd(fd);
+
   return file_close(file);
 }

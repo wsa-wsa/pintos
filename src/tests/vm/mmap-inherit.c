@@ -29,4 +29,5 @@ test_main (void)
   /* Verify data again. */
   CHECK (!memcmp (actual, sample, strlen (sample)),
          "checking that mmap'd file still has same data");
+  // exit(0);
 }

@@ -21,7 +21,15 @@ extern int sys_write (int fd, const void *buffer, unsigned length);
 extern void sys_seek (int fd, unsigned position);
 extern unsigned sys_tell (int fd);
 extern void sys_close (int fd);
+typedef uint32_t mapid_t;
+extern mapid_t sys_mmap (int fd, void *addr);
+extern void sys_munmap (mapid_t mapping);
 
+extern bool chdir (const char *dir);
+extern bool mkdir (const char *dir);
+extern bool readdir (int fd, char *name);
+extern bool isdir (int fd);
+extern int inumber (int fd);
 static uint32_t (*syscall_table[])(void)={
   /* Projects 2 and later. */
     [SYS_HALT]      sys_halt,
@@ -39,8 +47,8 @@ static uint32_t (*syscall_table[])(void)={
     [SYS_CLOSE]     sys_close,                  /**< Close a file. */
 
     /* Project 3 and optionally project 4. */
-    [SYS_MMAP]      sys_defalut,                   /**< Map a file into memory. */
-    [SYS_MUNMAP]    sys_defalut,                 /**< Remove a memory mapping. */
+    [SYS_MMAP]      sys_mmap,                   /**< Map a file into memory. */
+    [SYS_MUNMAP]    sys_munmap,                 /**< Remove a memory mapping. */
 
     /* Project 4 only. */
     [SYS_CHDIR]     sys_defalut,                  /**< Change the current directory. */

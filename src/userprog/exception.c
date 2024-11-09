@@ -165,6 +165,12 @@ page_fault (struct intr_frame *f)
   if(is_user_vaddr(fault_addr)&&not_present){
    struct thread * t = thread_current();
    struct vm_eara* vma = find_vma(&t->vm_list, fault_addr);
+   if(fault_addr>=t->esp||is_stack_push_vaddr(t, user, fault_addr)){
+      if(!is_stack_vaddr(fault_addr)){
+         sys_exit(-1);
+      }
+      else if(vma==NULL)vma=alloc_stack(t, fault_addr);
+   }
    if(vma==NULL){
       sys_exit(-1);
       return;
