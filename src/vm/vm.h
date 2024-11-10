@@ -55,10 +55,10 @@ struct page_frame* page_eviction(struct list* list, uint32_t* pd, bool writable)
 struct page_frame* get_page_eviction(struct thread* t, uint32_t upage, bool writable);
 struct vm_eara* find_vma(struct list* list, uint32_t upage);
 void free_page_frame(struct thread *t);
+void free_vma(struct thread *t);
 typedef int32_t mapid_t;
 void *mmap(void *addr, size_t length, int flags, int fd, off_t offset);
 int munmap(void *addr, size_t length);
 mapid_t sys_mmap (int fd, void *addr);
 void sys_munmap (mapid_t mapping);
-void munmap_all(struct thread *t);
 #endif

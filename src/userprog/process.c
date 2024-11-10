@@ -593,8 +593,8 @@ load_segment (void * vm, off_t ofs, uint8_t *upage,
     struct vm_eara *vma = (struct vm_eara *)vm;
     struct thread * t= thread_current();
     struct page_frame *pf = get_page_eviction(t, upage, writable);
-    // pf->rw = writable;
-    ASSERT(pf->upage==upage);
+    pf->vma = vm;
+    ASSERT(pf->vma->file==vma->file);
     if(swap_out(t, upage, pf->kpage));
     else{
       if(read_bytes){
@@ -612,7 +612,7 @@ load_segment (void * vm, off_t ofs, uint8_t *upage,
       palloc_free_page (pf->kpage);
       return false; 
     }
-    pf->vma = vm;
+  
 
     // struct page_table_entry* pte = pagedir_get_pte(t->pagedir, upage);
     // struct list_elem *e = NULL;
@@ -721,8 +721,10 @@ void sys_exit(int status){
   t->xstatus=status;
   thread_wakeup(t->parent);
   // intr_disable();
+  // release_mmap(t);
   free_page_frame(t);
   file_close(t->exec);
+
   // intr_enable();
   thread_exit();
 }

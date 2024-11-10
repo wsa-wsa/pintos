@@ -134,8 +134,8 @@ void free_page_frame(struct thread *t){
       struct page_frame *pf = list_entry(e, struct page_frame, elem);  // 转换为实际数据类型
       struct page_table_entry* pte = pagedir_get_pte(t->pagedir, pf->upage);
       struct vm_eara *vma = pf->vma;
-      if(vma!=NULL&&vma->file!=NULL&&vma->file->inode!=t->exec->inode){
-        file(vma->file, pf->upage-vma->start+vma->offset);
+      if(vma!=NULL&&vma->file!=NULL&&vma->file->inode!=t->exec->inode&&pte->dirty){
+        file_seek(vma->file, pf->upage-vma->start+vma->offset);
         off_t size = vma->end - (off_t)pf->upage>PGSIZE?PGSIZE:vma->end-(off_t)pf->upage;
         file_write(vma->file, pf->kpage, size);
       }
@@ -158,6 +158,7 @@ void free_vma(struct thread *t){
       free(vma);  // 释放数据结构内存
   }
 }
+
 mapid_t sys_mmap (int fd, void *addr){
   if(pg_ofs(addr)!=0||addr==0||is_stack_vaddr(addr))return -1;
   struct vm_eara * vma = NULL;
@@ -208,5 +209,4 @@ void sys_munmap (mapid_t mapping){
   file_close(vma->file);
   list_remove(&vma->elem);
   free(vma);
-  // return true;
 }
