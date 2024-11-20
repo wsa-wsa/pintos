@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/block.h"
+// 文件类型
+#define T_DIR     1   // Directory
+#define T_FILE    2   // File
+#define T_DEVICE  3   // Device
 
 struct bitmap;
 
@@ -20,4 +24,6 @@ void inode_deny_write (struct inode *);
 void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
 
+int inode_type(struct inode*);
+void set_inode_type(struct inode*, int );
 #endif /**< filesys/inode.h */

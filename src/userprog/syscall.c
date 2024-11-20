@@ -25,11 +25,11 @@ typedef uint32_t mapid_t;
 extern mapid_t sys_mmap (int fd, void *addr);
 extern void sys_munmap (mapid_t mapping);
 
-extern bool chdir (const char *dir);
-extern bool mkdir (const char *dir);
-extern bool readdir (int fd, char *name);
-extern bool isdir (int fd);
-extern int inumber (int fd);
+extern bool sys_chdir (const char *dir);
+extern bool sys_mkdir (const char *dir);
+extern bool sys_readdir (int fd, char *name);
+extern bool sys_isdir (int fd);
+extern int  sys_inumber (int fd);
 static uint32_t (*syscall_table[])(void)={
   /* Projects 2 and later. */
     [SYS_HALT]      sys_halt,
@@ -51,11 +51,11 @@ static uint32_t (*syscall_table[])(void)={
     [SYS_MUNMAP]    sys_munmap,                 /**< Remove a memory mapping. */
 
     /* Project 4 only. */
-    [SYS_CHDIR]     sys_defalut,                  /**< Change the current directory. */
-    [SYS_MKDIR]     sys_defalut,                  /**< Create a directory. */
-    [SYS_READDIR]   sys_defalut,                /**< Reads a directory entry. */
-    [SYS_ISDIR]     sys_defalut,                  /**< Tests if a fd represents a directory. */
-    [SYS_INUMBER]   sys_defalut                /**< Returns the inode number for a fd. */
+    [SYS_CHDIR]     sys_chdir,                  /**< Change the current directory. */
+    [SYS_MKDIR]     sys_mkdir,                  /**< Create a directory. */
+    [SYS_READDIR]   sys_readdir,                /**< Reads a directory entry. */
+    [SYS_ISDIR]     sys_isdir,                  /**< Tests if a fd represents a directory. */
+    [SYS_INUMBER]   sys_inumber                /**< Returns the inode number for a fd. */
 };
 
 void

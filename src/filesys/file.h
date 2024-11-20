@@ -4,21 +4,6 @@
 #include "filesys/off_t.h"
 #include<stdbool.h>
 struct inode;
-struct devsw {
-  int (*read)(int, const char *, int);
-  int (*write)(int, const char *, int);
-};
-/** An open file. */
-struct file 
-  {
-    struct inode *inode;        /**< File's inode. 文件的inode指针*/
-    off_t pos;                  /**< Current position. */
-    bool deny_write;            /**< Has file_deny_write() been called? */
-    // enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type; /*文件类型*/
-    int ref;                    /** 引用的数量 */
-    struct devsw sw;
-  };
-
 /** Opening and closing files. */
 struct file *file_open (struct inode *);
 struct file *file_reopen (struct file *);
@@ -34,7 +19,7 @@ off_t file_write_at (struct file *, const void *, off_t size, off_t start);
 /** Preventing writes. */
 void file_deny_write (struct file *);
 void file_allow_write (struct file *);
-
+bool file_write_deny(struct file *);
 /** File position. */
 void file_seek (struct file *, off_t);
 off_t file_tell (struct file *);

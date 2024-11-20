@@ -18,6 +18,7 @@
 #include "vm/swap.h"
 #endif
 
+#include "filesys/inode.h"
 /** Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -59,7 +60,7 @@ static long long user_ticks;    /**< # of timer ticks in user programs. */
 #define TIME_SLICE 4            /**< # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /**< # of timer ticks since last yield. */
 
-static struct file stdio;
+extern struct file stdio;
 /** If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -78,12 +79,12 @@ void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
 void stdio_init(struct file *stdio){
-  stdio->inode=NULL;
-  stdio->pos=0;
-  stdio->ref=1;
-  stdio->deny_write=false;
-  stdio->sw.write=console_write;
-  stdio->sw.read=console_read;
+  // stdio->inode=NULL;
+  // stdio->pos=0;
+  // stdio->ref=1;
+  // stdio->deny_write=false;
+  // stdio->sw.write=console_write;
+  // stdio->sw.read=console_read;
 }
 /** Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -121,12 +122,16 @@ thread_init (void)
   initial_thread->xstatus = 0;
   initial_thread->chan = 0;
   initial_thread->parent = 0;
-  // struct file f;
+  initial_thread->ipwd = 0;
   initial_thread->ofile[STDIN_FILENO]=&stdio;
   initial_thread->ofile[STDOUT_FILENO]=&stdio;
   initial_thread->exec = NULL;
 }
-
+void thread_init_dir(void){
+  printf("thread name: %s\n", thread_current()->name);
+  struct dir * dir = dir_open_root();
+  initial_thread->ipwd = dir_get_inode(dir);
+}
 /** Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
 void
@@ -143,7 +148,7 @@ thread_start (void)
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
 }
-
+#include "filesys/buffer.h"
 /** Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
@@ -152,11 +157,15 @@ thread_tick (void)
   struct thread *t = thread_current ();
 
   /* Update statistics. */
-  if (t == idle_thread)
+  if (t == idle_thread){
     idle_ticks++;
+    // buffer_write_back();
+  }
 #ifdef USERPROG
-  else if (t->pagedir != NULL)
+  else if (t->pagedir != NULL){
     user_ticks++;
+    // buffer_write_back();
+  }
 #endif
   else
     kernel_ticks++;
@@ -210,6 +219,7 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
   t->parent = thread_current();
+  t->ipwd   = inode_reopen(t->parent->ipwd);
   t->ofile[STDIN_FILENO]=&stdio;
   t->ofile[STDOUT_FILENO]=&stdio;
   t->exec = NULL;
@@ -333,6 +343,30 @@ thread_unblock (struct thread *t)
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
+
+// void 
+// thread_suspend(void){
+//   struct thread *cur = thread_current ();
+//   ASSERT (!intr_context ());
+//   ASSERT (intr_get_level () == INTR_OFF);
+
+//   if (cur != idle_thread) {
+//     list_remove(&cur->elem);
+//     list_push_back (&block_list, &cur->elem);
+//   }
+//   thread_current ()->status = THREAD_BLOCKED;
+//   schedule ();
+// }
+
+// void thread_resume(struct thread *t){
+//   enum intr_level old_level;
+//   ASSERT (is_thread (t));
+//   old_level = intr_disable ();
+//   ASSERT (t->status == THREAD_BLOCKED);
+//   list_push_back (&ready_list, &t->elem);
+//   t->status = THREAD_READY;
+//   intr_set_level (old_level);
+// }
 
 /** Returns the name of the running thread. */
 const char *
@@ -487,6 +521,7 @@ idle (void *idle_started_ UNUSED)
 
   for (;;) 
     {
+      // buffer_write_back();
       /* Let someone else run. */
       intr_disable ();
       thread_block ();
@@ -504,6 +539,7 @@ idle (void *idle_started_ UNUSED)
          See [IA32-v2a] "HLT", [IA32-v2b] "STI", and [IA32-v3a]
          7.11.1 "HLT Instruction". */
       asm volatile ("sti; hlt" : : : "memory");
+      // buffer_write_back();
     }
 }
 

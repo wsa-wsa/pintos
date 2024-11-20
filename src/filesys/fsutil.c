@@ -10,7 +10,7 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
-
+#include "filesys/buffer.h"
 /** List files in the root directory. */
 void
 fsutil_ls (char **argv UNUSED) 
@@ -99,7 +99,8 @@ fsutil_extract (char **argv UNUSED)
       int size;
 
       /* Read and parse ustar header. */
-      block_read (src, sector++, header);
+      // block_read (src, sector++, header);
+      buffer_read(src, sector++, 0, header, BLOCK_SECTOR_SIZE);
       error = ustar_parse_header (header, &file_name, &type, &size);
       if (error != NULL)
         PANIC ("bad ustar header in sector %"PRDSNu" (%s)", sector - 1, error);
@@ -130,7 +131,10 @@ fsutil_extract (char **argv UNUSED)
               int chunk_size = (size > BLOCK_SECTOR_SIZE
                                 ? BLOCK_SECTOR_SIZE
                                 : size);
-              block_read (src, sector++, data);
+              // block_read (src, sector++, data);
+              // ASSERT(src==fs_device);
+              buffer_read(src, sector++, 0, data, BLOCK_SECTOR_SIZE);
+              // ASSERT(dst==fs_device);
               if (file_write (dst, data, chunk_size) != chunk_size)
                 PANIC ("%s: write failed with %d bytes unwritten",
                        file_name, size);
@@ -148,9 +152,10 @@ fsutil_extract (char **argv UNUSED)
      end-of-archive marker. */
   printf ("Erasing ustar archive...\n");
   memset (header, 0, BLOCK_SECTOR_SIZE);
-  block_write (src, 0, header);
-  block_write (src, 1, header);
-
+  // block_write (src, 0, header);
+  // block_write (src, 1, header);
+  buffer_write(src, 0, 0, header, BLOCK_SECTOR_SIZE);
+  buffer_write(src, 1, 0, header, BLOCK_SECTOR_SIZE);
   free (data);
   free (header);
 }
@@ -195,7 +200,9 @@ fsutil_append (char **argv)
   /* Write ustar header to first sector. */
   if (!ustar_make_header (file_name, USTAR_REGULAR, size, buffer))
     PANIC ("%s: name too long for ustar format", file_name);
-  block_write (dst, sector++, buffer);
+  ASSERT(dst==fs_device);
+  buffer_write(dst, sector++, 0, buffer, BLOCK_SECTOR_SIZE);
+  // block_write (dst, sector++, buffer);
 
   /* Do copy. */
   while (size > 0) 
@@ -206,7 +213,9 @@ fsutil_append (char **argv)
       if (file_read (src, buffer, chunk_size) != chunk_size)
         PANIC ("%s: read failed with %"PROTd" bytes unread", file_name, size);
       memset (buffer + chunk_size, 0, BLOCK_SECTOR_SIZE - chunk_size);
-      block_write (dst, sector++, buffer);
+      // block_write (dst, sector++, buffer);
+      ASSERT(dst==fs_device);
+      buffer_write(dst, sector++, 0, buffer, BLOCK_SECTOR_SIZE);
       size -= chunk_size;
     }
 
@@ -214,9 +223,11 @@ fsutil_append (char **argv)
      sectors full of zeros.  Don't advance our position past
      them, though, in case we have more files to append. */
   memset (buffer, 0, BLOCK_SECTOR_SIZE);
-  block_write (dst, sector, buffer);
-  block_write (dst, sector, buffer + 1);
-
+  // block_write (dst, sector, buffer);
+  // block_write (dst, sector, buffer + 1);
+  ASSERT(dst==fs_device);
+  buffer_write(dst, sector, 0, buffer, BLOCK_SECTOR_SIZE);
+  buffer_write(dst, sector, 0, buffer + 1, BLOCK_SECTOR_SIZE);
   /* Finish up. */
   file_close (src);
   free (buffer);

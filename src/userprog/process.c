@@ -419,6 +419,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
     // pagedir_set_page(t->pagedir, mem_page, NULL, writable);
     struct vm_eara *vma =(struct vm_eara *)malloc(sizeof(*vma));
+    
     vma->flags = phdr.p_flags;
     vma->start = pg_round_down(phdr.p_vaddr);
     vma->end   = phdr.p_vaddr+phdr.p_filesz;
@@ -427,7 +428,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     vma->file  = file_reopen(file);
     // file_close(file);
     list_push_back(&t->vm_list, &vma->elem);
-    // printf("vm %p---%p off_t %p\n", vma->start, vma->end, vma->offset);
+    // printf("writeable %d vm %p---%p off_t %p\n", ((phdr.p_flags & PF_W) != 0),vma->start, vma->end, vma->offset);
     if(phdr.p_filesz!=phdr.p_memsz){
       struct vm_eara *vma_bss =(struct vm_eara *)malloc(sizeof(*vma_bss));
       vma_bss->flags = phdr.p_flags;
@@ -539,7 +540,7 @@ load_segment (void * vm, off_t ofs, uint8_t *upage,
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
-#define VM
+
 #ifndef VM
     struct file *file = (struct file *)vm;
     file_seek (file, ofs);

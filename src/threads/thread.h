@@ -100,6 +100,9 @@ struct thread
     struct list vm_list;
     struct file * ofile[NOFILE];
     uint32_t esp;
+    char *pwd;
+    struct inode *ipwd;                 /** 当前目录*/
+    
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
 
@@ -130,6 +133,7 @@ extern struct lock filesys_lock;
 
 void thread_init (void);
 void thread_start (void);
+void thread_init_dir(void);
 
 void thread_tick (void);
 void thread_print_stats (void);

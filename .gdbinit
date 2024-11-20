@@ -1,4 +1,4 @@
-symbol-file src/vm/build/kernel.o
+symbol-file src/filesys/build/kernel.o
 # add-symbol-file src/vm/build/lib/user/entry.o 0x8048711
 # add-symbol-file src/vm/build/tests/main.o 0x80486b5
 # add-symbol-file src/vm/build/lib/user/entry.o 0x0804884a

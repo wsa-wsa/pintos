@@ -112,6 +112,51 @@
         }
       ],
       "internalConsoleOptions": "openOnSessionStart",
+    }, 
+    {
+      "type": "cppdbg",
+      "request": "launch",
+      "name": "Filesys",
+      "cwd": "${workspaceRoot}/src/filesys",
+      "program": "${workspaceRoot}/src/filesys/build/kernel.o",
+      "miDebuggerServerAddress": "localhost:1234",
+      "miDebuggerPath": "/usr/bin/gdb",
+      // "miDebuggerPath": "/home/wsa/Desktop/toolchain/x86_64/bin/i386-elf-gdb",
+      // "preLaunchTask":"userprogbulid",             
+      "stopAtEntry": true,
+      "setupCommands": [ 
+        // {
+        //   "text": "add-symbol-file ${workspaceRoot}/src/vm/build/lib/user/entry.o 0x80489b6",
+        //   "ignoreFailures": true
+        // },
+        // {
+        //   "text": "add-symbol-file ${workspaceRoot}/src/vm/build/tests/main.o 0x08048972",
+        //   "ignoreFailures": true
+        // },
+        // {
+        //   "text": "add-symbol-file ${workspaceRoot}/src/vm/build/lib/string.o 0x08049A04",
+        //   "ignoreFailures": true
+        // },
+        // {
+        //   "text": "add-symbol-file ${workspaceRoot}/src/vm/build/tests/vm/page-linear.o 0x08048074",
+        //   "ignoreFailures": true
+        // },
+        {
+          "description": "Enable assembly display",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Display assembly",
+          "text": "set disassembly-flavor intel"
+        },
+        {
+          "text": "-enable-pretty-printing", // 启用美化输出
+          "description": "enable pretty printing",
+          "ignoreFailures": true
+        }
+      ],
+      "internalConsoleOptions": "openOnSessionStart",
     },
   ]
 }

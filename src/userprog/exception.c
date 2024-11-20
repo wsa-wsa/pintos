@@ -172,20 +172,21 @@ page_fault (struct intr_frame *f)
       else if(vma==NULL)vma=alloc_stack(t, fault_addr);
    }
    if(vma==NULL){
+      printf("hasn't vma\n");
       sys_exit(-1);
       return;
    }
    if(!load_vm(t, vma, fault_addr)){
-
       printf("laod failed!!!\n");
       sys_exit(-1);
    }
-   // sys_exit(-1);
    return;
   }else if(user&&!not_present){
+   printf("This address %p can't write\n", fault_addr);
    sys_exit(-1);
    return;
   }else if(user&&is_kernel_vaddr(fault_addr)){
+   printf("user&&is_kernel_vaddr(fault_addr)\n");
    sys_exit(-1);
    return;
   }else if(!user&&not_present){

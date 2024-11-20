@@ -2,6 +2,21 @@
 #include <debug.h>
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+struct file stdio;
+struct devsw {
+  int (*read)(int, const char *, int);
+  int (*write)(int, const char *, int);
+};
+/** An open file. */
+struct file 
+  {
+    struct inode *inode;        /**< File's inode. 文件的inode指针*/
+    off_t pos;                  /**< Current position. */
+    bool deny_write;            /**< Has file_deny_write() been called? */
+    // enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type; /*文件类型*/
+    int ref;                    /** 引用的数量 */
+    struct devsw sw;
+  };
 /** Opens a file for the given INODE, of which it takes ownership,
    and returns the new file.  Returns a null pointer if an
    allocation fails or if INODE is null. */
@@ -138,6 +153,10 @@ file_allow_write (struct file *file)
     }
 }
 
+bool
+file_write_deny(struct file* file){
+  return file->deny_write;
+}
 /** Returns the size of FILE in bytes. */
 off_t
 file_length (struct file *file) 

@@ -118,7 +118,8 @@ void free_vm(struct thread * t){
       struct page_frame *pf = list_entry(e, struct page_frame, elem);  // 转换为实际数据类型
       struct page_table_entry* pte = pagedir_get_pte(t->pagedir, pf->upage);
       struct vm_eara *vma = pf->vma;
-      if(vma!=NULL&&vma->file!=NULL&&vma->file->inode!=t->exec->inode&&pte->dirty){
+      
+      if(vma!=NULL&&vma->file!=NULL&&file_get_inode(vma->file)!=file_get_inode(t->exec)&&pte->dirty){
         file_seek(vma->file, pf->upage-vma->start+vma->offset);
         off_t size = vma->end - (off_t)pf->upage>PGSIZE?PGSIZE:vma->end-(off_t)pf->upage;
         file_write(vma->file, pf->kpage, size);
@@ -134,7 +135,7 @@ void free_page_frame(struct thread *t){
       struct page_frame *pf = list_entry(e, struct page_frame, elem);  // 转换为实际数据类型
       struct page_table_entry* pte = pagedir_get_pte(t->pagedir, pf->upage);
       struct vm_eara *vma = pf->vma;
-      if(vma!=NULL&&vma->file!=NULL&&vma->file->inode!=t->exec->inode&&pte->dirty){
+      if(vma!=NULL&&vma->file!=NULL&&file_get_inode(vma->file)!=file_get_inode(t->exec)&&pte->dirty){
         file_seek(vma->file, pf->upage-vma->start+vma->offset);
         off_t size = vma->end - (off_t)pf->upage>PGSIZE?PGSIZE:vma->end-(off_t)pf->upage;
         file_write(vma->file, pf->kpage, size);
@@ -170,9 +171,9 @@ mapid_t sys_mmap (int fd, void *addr){
   vma->start = pg_round_down(addr);
   vma->end   = vma->start+file_length(file);
   vma->offset= 0;
-  vma->inode = file->inode;
+  vma->inode = file_get_inode(file);
   vma->file  = file_reopen(file);
-  vma->flags = file->deny_write?0:2;
+  vma->flags = file_write_deny(file)?0:2;
   list_push_back(&t->vm_list, &vma->elem);
   return vma->start;
 }

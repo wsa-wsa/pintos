@@ -16,5 +16,6 @@ test_main (void)
   byte_cnt = write (handle, sample, sizeof sample - 1);
   if (byte_cnt != sizeof sample - 1)
     fail ("write() returned %d instead of %zu", byte_cnt, sizeof sample - 1);
+  chdir("test.txt");
 }
 

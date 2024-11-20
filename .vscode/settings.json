@@ -38,6 +38,22 @@
         "filesys.h": "c",
         "file.h": "c",
         "list": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "syscall.h": "c",
+        "buffer.h": "c",
+        "memory_resource": "c",
+        "inode.h": "c",
+        "vaddr.h": "c",
+        "synch.h": "c",
+        "fstream": "c",
+        "ostream": "c",
+        "sstream": "c",
+        "streambuf": "c",
+        "initializer_list": "c",
+        "utility": "c",
+        "functional": "c",
+        "ratio": "c",
+        "tuple": "c",
+        "type_traits": "c"
     }
 }

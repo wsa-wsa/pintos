@@ -118,7 +118,7 @@ void swap_in(struct thread * t, uint32_t upage, uint32_t kpage){
   if(pte==NULL||!pte->dirty)return;
   // printf("write upage: %p --- %p\n", upage, upage+PGSIZE-1);
   struct vm_eara *vma = find_vma(&t->vm_list, upage);
-  if(vma->file!=NULL&&vma->file->inode!=t->exec->inode){
+  if(vma->file!=NULL&&file_get_inode(vma->file)!=file_get_inode(t->exec)){
     file_seek(vma->file, upage-vma->start+vma->offset);
     off_t size = vma->end - upage>PGSIZE?PGSIZE:vma->end-upage;
     file_write(vma->file, kpage, size);
