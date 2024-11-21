@@ -120,6 +120,7 @@ thread_init (void)
   initial_thread->xstatus = 0;
   initial_thread->chan = 0;
   initial_thread->parent = 0;
+  initial_thread->ticks = 0;
   // struct file f;
   initial_thread->ofile[STDIN_FILENO]=&stdio;
   initial_thread->ofile[STDOUT_FILENO]=&stdio;
@@ -209,6 +210,7 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
   t->parent = thread_current();
+  t->ticks  = 0;
   t->ofile[STDIN_FILENO]=&stdio;
   t->ofile[STDOUT_FILENO]=&stdio;
   t->exec = NULL;
@@ -232,30 +234,39 @@ thread_create (const char *name, int priority,
 
   return tid;
 }
-void thread_sleep(void * chan)
+
+bool list_elem_ticks_less(struct list_elem* e1, struct list_elem* e2, void *aux){
+  
+  struct thread *t1=list_entry(e1, struct thread, elem);
+  struct thread *t2=list_entry(e2, struct thread, elem);
+  ASSERT(t1->status==THREAD_SLEEPING&&t2->status==THREAD_SLEEPING);
+  if(t1->ticks!=t2->ticks)return t1->ticks<t2->ticks;
+  return t1->priority>t2->priority;
+}
+
+void thread_sleep(uint64_t ticks)
 {
     struct thread *cur = thread_current ();
     enum intr_level old_level;
     
     ASSERT (!intr_context ());
-    // initial_thread;
+
     old_level = intr_disable ();
     if (cur != idle_thread){
       cur->status = THREAD_SLEEPING;
-      cur->chan = chan;
-      list_push_back(&sleep_list, &cur->elem);
+      cur->ticks  = ticks;
+      list_insert_ordered(&sleep_list, &cur->elem, list_elem_ticks_less, 0);
       schedule ();
-      cur->chan = 0;
     }
     intr_set_level (old_level);
 }
 
-void thread_wakeup(void * chan)
+void thread_wakeup(uint64_t ticks)
 {
   struct list_elem *cur;
   for(cur=list_begin(&sleep_list); cur!=list_end(&sleep_list);){
     struct thread * t=list_entry(cur, struct thread, elem);
-    if(t->chan==chan){
+    if(t->ticks>=ticks){
       struct list_elem *list=cur;
       cur=list_remove(cur);
       list_push_back(&ready_list, &t->elem);
@@ -275,7 +286,8 @@ void thread_wait(tid_t tid){
       if(t->tid==tid){
         if(t->parent==cur){
           if(t->status!=THREAD_DYING){
-            thread_sleep(cur);
+            t->chan = cur;
+            thread_block();
           }
           if (t->status == THREAD_DYING && t != initial_thread) {
             list_remove(e);

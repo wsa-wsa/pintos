@@ -93,6 +93,7 @@ struct thread
     struct list_elem allelem;           /**< List element for all threads list. */
     
     void *chan;
+    int64_t ticks;
     int xstatus;
     struct thread *parent;
     struct file *exec;
@@ -139,8 +140,8 @@ void thread_yield (void);
 /** Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
-void thread_sleep(void *);
-void thread_wakeup(void *);
+void thread_sleep(uint64_t);
+void thread_wakeup(uint64_t);
 void thread_wait(tid_t);
 int thread_get_priority (void);
 void thread_set_priority (int);

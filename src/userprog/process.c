@@ -562,8 +562,8 @@ void sys_exit(int status){
   //   cur->parent->xstatus=status;
     
   // }
-
-  thread_wakeup(cur->parent);
+  if(cur->chan!=NULL)
+    thread_unblock(cur->chan);
   file_close(cur->exec);
   thread_exit();
 }
