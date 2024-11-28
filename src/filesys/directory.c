@@ -29,7 +29,7 @@ struct dir_entry
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), T_DIR);
 }
 
 struct dir *
@@ -37,29 +37,34 @@ directory_open (block_sector_t sector){
   return dir_open (inode_open (sector));
 }
 
-bool directory_create(struct dir *dir, const char *name)
+bool directory_create(struct inode *ip, const char *name)
 {
+  ASSERT(inode_type(ip)==T_DIR);
   block_sector_t inode_sector = 0;
-  struct dir *root = dir_reopen(dir);
-  bool success = (root != NULL
+  struct dir *dir = dir_open(inode_reopen(ip));
+  bool success = (dir != NULL
+                  && !inode_will_remove(dir_get_inode(dir))
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, MAX_DIR_ENTRY)
-                  && dir_add (root, name, inode_sector));
+                  && dir_create (inode_sector, MAX_DIR_ENTRY)
+                  && dir_add (dir, name, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
-  dir_close (root);
+  if (!success)
+    goto done;
   struct dir * cur = directory_open(inode_sector);
   success = (dir_add(cur, ".", inode_sector)
-            &&dir_add(cur, "..", inode_get_inumber(dir->inode)));
-  set_inode_type(cur->inode, T_DIR);
+            &&dir_add(cur, "..", inode_get_inumber(ip)));
   dir_close(cur);
+done:
+  dir_close (dir);
   return success;
 }
 
-bool 
-path_create(struct dir *dir, const char *path){
+// void  
+// print_all_content(){
+//   struct dir * dir = dir_open_root();
 
-}
+// }
 /** Opens and returns the directory for the given INODE, of which
    it takes ownership.  Returns a null pointer on failure. */
 struct dir *
@@ -113,25 +118,18 @@ dir_get_inode (struct dir *dir)
 {
   return dir->inode;
 }
-
-/** Searches DIR for a file with the given NAME.
- * 在 DIR 中搜索具有给定 NAME 的文件。
-   If successful, returns true, sets *EP to the directory entry
-   if EP is non-null, and sets *OFSP to the byte offset of the
-   directory entry if OFSP is non-null.
-   otherwise, returns false and ignores EP and OFSP. */
 // 查找文件和查找DIR需要分清
 static bool
-lookup (const struct dir *dir, const char *name,
+dirlookup (const struct inode *inode, const char *name,
         struct dir_entry *ep, off_t *ofsp) 
 {
   struct dir_entry e;
   size_t ofs;
   
-  ASSERT (dir != NULL);
+  ASSERT (inode != NULL);
   ASSERT (name != NULL);
-
-  for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  ASSERT (inode_type(inode)==T_DIR);
+  for (ofs = 0; inode_read_at (inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
     if (e.in_use && !strcmp (name, e.name)) 
       {
@@ -143,21 +141,20 @@ lookup (const struct dir *dir, const char *name,
       }
   return false;
 }
-struct inode* namei(struct dir * dir, const char *path){
-  char *token, *save_ptr;
-  struct dir_entry e;
-  off_t ofs;
-  struct dir * cur_dir = dir_reopen(dir);
-  for (token = strtok_r (path, "/", &save_ptr); token != NULL; token = strtok_r (NULL, "/", &save_ptr)){
-    if(!lookup(cur_dir, token, &e, &ofs)){
-      dir_close(cur_dir);
-      return NULL;
-    }
-    dir_close(cur_dir);
-    cur_dir = directory_open(e.inode_sector);
-  }
-  return inode_open (e.inode_sector);
+/** Searches DIR for a file with the given NAME.
+ * 在 DIR 中搜索具有给定 NAME 的文件。
+   If successful, returns true, sets *EP to the directory entry
+   if EP is non-null, and sets *OFSP to the byte offset of the
+   directory entry if OFSP is non-null.
+   otherwise, returns false and ignores EP and OFSP. */
+// 查找文件和查找DIR需要分清
+static bool
+lookup (const struct dir *dir, const char *name,
+        struct dir_entry *ep, off_t *ofsp) 
+{
+  return dirlookup(dir->inode, name, ep, ofsp);
 }
+
 /** Searches DIR for a file with the given NAME
    and returns true if one exists, false otherwise.
    在 当前DIR 中搜索具有给定 NAME 的文件，
@@ -252,7 +249,31 @@ dir_remove (struct dir *dir, const char *name)
   inode = inode_open (e.inode_sector);
   if (inode == NULL)
     goto done;
-
+  if(inode_type(inode)==T_DIR){
+    struct dir* cur_dir = dir_open(inode_reopen(inode));
+    //跳过.和..这两个目录项
+    cur_dir->pos = 2*sizeof(struct dir_entry);
+    if(dir_readdir(cur_dir, name)){
+      dir_close(cur_dir);
+      return false;
+    }
+    /* 如果是dir则需要删除自引用*/
+    struct dir_entry de;
+    de.in_use = false;
+    strlcpy(de.name, ".", 2);
+    if (inode_write_at (inode, &de, sizeof de, 0) != sizeof de) 
+      {
+        dir_close(cur_dir);
+        goto done;
+      }
+    strlcpy(de.name, "..", 3);
+    if (inode_write_at (inode, &de, sizeof de, sizeof(de)) != sizeof de)
+      {
+        dir_close(cur_dir);
+        goto done;
+      } 
+    dir_close(cur_dir);
+  }
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
@@ -287,38 +308,142 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
+// Copy the next path element from path into name.
+// Return a pointer to the element following the copied one.
+// The returned path has no leading slashes,
+// so the caller can check *path=='\0' to see if the name is the last one.
+// If no name to remove, return 0.
+//
+// Examples:
+//   skipelem("a/bb/c", name) = "bb/c", setting name = "a"
+//   skipelem("///a//bb", name) = "bb", setting name = "a"
+//   skipelem("a", name) = "", setting name = "a"
+//   skipelem("", name) = skipelem("////", name) = 0
+//
+static char*
+skipelem(char *path, char *name)
+{
+  char *s;
+  int len;
+
+  while(*path == '/')
+    path++;
+  if(*path == 0)
+    return 0;
+  s = path;
+  while(*path != '/' && *path != 0)
+    path++;
+  len = path - s;
+  if(len > NAME_MAX)
+    memmove(name, s, NAME_MAX + 1);
+  else {
+    memmove(name, s, len);
+    name[len] = '\0';
+  }
+  while(*path == '/')
+    path++;
+  return path;
+}
+// Look up and return the inode for a path name.
+// If parent != 0, return the inode for the parent and copy the final
+// path element into name, which must have room for DIRSIZ bytes.
+// Must be called inside a transaction since it calls iput().
+static struct inode*
+namex(char *path, int nameiparent, char *name)
+{
+  struct inode *ip, *next;
+  struct dir_entry e;
+  if(*path == '/')
+    ip = inode_open (ROOT_DIR_SECTOR);
+  else
+    ip = inode_reopen(thread_current()->ipwd);
+
+  while((path = skipelem(path, name)) != 0){
+    if(inode_type(ip) != T_DIR){
+      inode_close(ip);
+      return 0;
+    }
+    if(nameiparent && *path == '\0'){
+      // Stop one level early.
+      return ip;
+    }
+    if(!dirlookup(ip, name, &e, 0)){
+      inode_close(ip);
+      return 0;
+    }
+    next = inode_open(e.inode_sector);
+    inode_close(ip);
+    if(!next){
+      return 0;
+    }
+    ip = next;
+  }
+  if(nameiparent){
+    return 0;
+  }
+  return ip;
+}
+
+struct inode*
+namei(char *path)
+{
+  char name[NAME_MAX + 1];
+  return namex(path, 0, name);
+}
+
+struct inode*
+nameiparent(char *path, char *name)
+{
+  return namex(path, 1, name);
+}
 
 bool sys_chdir (const char *dir){
-  struct dir_entry;
-  // namei(NULL, dir);
-  struct dir *pwd = dir_reopen(thread_current()->ipwd);
-  thread_current()->ipwd = NULL;
-  directory_create(pwd, "hhhh");
-  printf("%s\n", dir);
-  namei(pwd, dir);
+  struct inode * ip = namei(dir);
+  if(!ip){
+    return false;
+  }
+  inode_close(thread_current()->ipwd);
+  
+  thread_current()->ipwd = ip;
   return true;
 }
 
 int sys_mkdir (const char *dir){
-  // struct inode *ipwd = thread_current()->ipwd;
-  // ipwd变成dpwd
   char path[128];
   strlcpy(path, dir, 128);
   if(dir==NULL||strlen(path)==0){
     return false;
   }
-  // // char path[MAX_DIR_LEN];
-  // struct dir *pwd = dir_reopen(thread_current()->ipwd);
-  asm ("movl $0, %eax");
-  // return 0;
+  char name[NAME_MAX + 1];
+  struct inode * ip = nameiparent(path, name);
+  if(!ip){
+    return -1;
+  }
+  bool suceess = directory_create(ip, name);
+  inode_close(ip);
+  return suceess;
 }
-
+struct dir *open_dir_file(struct file * file){
+  ASSERT(inode_type(file_get_inode(file))==T_DIR);
+  struct inode *ip = inode_reopen(file_get_inode(file));
+  return dir_open(ip);
+}
 bool sys_readdir (int fd, char *name){
-  return true;
+  // dir_readdir(, );
+  struct file * file = get_file(fd);
+  struct dir * dir = open_dir_file(file);
+  // char name[NAME_MAX+1];
+  dir->pos = file_tell(file);
+  dir->pos = dir->pos > 2* sizeof(struct dir_entry)? \
+              dir->pos: 2*sizeof(struct dir_entry);
+  bool success = dir_readdir(dir, name);
+  file_seek(file, dir->pos);
+  dir_close(dir);
+  return success;
 }
 bool sys_isdir (int fd){
   struct file * f = get_file(fd);
-  return true;
+  return inode_type(file_get_inode(f))==T_DIR;
 }
 int sys_inumber (int fd){
   struct file * f = get_file(fd);

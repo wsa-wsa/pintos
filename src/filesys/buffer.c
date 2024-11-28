@@ -17,7 +17,6 @@ void buffer_init(){
     lock_init(&bcache.lock);
     for(int i=0; i<BUFFER_LENGTH; ++i){
         lock_init(&bufcache[i].lock);
-        sema_init(&bufcache[i].sema, 1);
         bufcache[i].blockno = - bk_size;
         list_push_back(&bcache.cachelist, &bufcache[i].elem);
     }
@@ -38,7 +37,6 @@ static void bahead(struct block *dev, block_sector_t blockno){
     if(last){
         struct buffer * b = list_entry(last, struct buffer, elem);
         lock_acquire(&b->lock);
-        // sema_down(&b->sema);
         if(b->dirty){
             bwrite(b);
         }
@@ -50,7 +48,6 @@ static void bahead(struct block *dev, block_sector_t blockno){
         b->valid  = 1;
         b->refcnt = 0;
         lock_release(&b->lock);
-        // sema_up(&b->sema);
     }
     lock_release(&bcache.lock);
 }
@@ -64,7 +61,6 @@ static struct buffer* bget(struct block *dev, block_sector_t blockno){
         if(b->dev!=NULL&&b->dev==dev&&(blockno/bk_size)==(b->blockno/bk_size)){
             b->refcnt++;
             lock_acquire(&b->lock);
-            // sema_down(&b->sema);
             lock_release(&bcache.lock);
             return b;
         }
@@ -77,7 +73,6 @@ static struct buffer* bget(struct block *dev, block_sector_t blockno){
     if(last){
         struct buffer * b = list_entry(last, struct buffer, elem);
         lock_acquire(&b->lock);
-        // sema_down(&b->sema);
         if(b->dirty){
             bwrite(b);
         }
@@ -120,18 +115,18 @@ void bwrite(struct buffer *b){
 
 void brelse(struct buffer *b){
     if(!b)return;
+    // 分析死锁产生的原因
+    lock_release(&b->lock);
+    if(b->dirty){
+        // periodic_disk_sync(b);
+    }
+    lock_acquire(&bcache.lock);
     b->refcnt--;
-    // if(b->dirty){
-    //     bwrite(b);
-    // }
     if(b->refcnt==0){
-        lock_acquire(&bcache.lock);
         list_remove(&b->elem);
         list_push_front(&bcache.cachelist, &b->elem);
-        lock_release(&bcache.lock);
     }
-    lock_release(&b->lock);
-    // sema_up(&b->sema);
+    lock_release(&bcache.lock);
 }
 
 void *boffset(struct buffer *b, block_sector_t bno){
@@ -167,15 +162,16 @@ void buffer_read(struct block * dev, block_sector_t sector, size_t ofs, const vo
 #include "devices/timer.h"
 #include "threads/thread.h"
 
-
+static uint64_t delay = 200;
 
 void bwriteback(struct buffer *b){
-    timer_sleep(200);
-    sema_down(&b->sema);
+    timer_sleep(delay);
+    // sema_down(&b->sema);
     if(b->dirty){
         bwrite(b);
+        b->dirty = 1;
     }
-    sema_up(&b->sema);
+    // sema_up(&b->sema);
 }
 
 void periodic_disk_sync(struct buffer *b){
@@ -187,10 +183,10 @@ void buffer_write_to_disk(){
     struct list_elem * e=NULL;
     for(e=list_begin(&bcache.cachelist); e!=list_end(&bcache.cachelist); e=list_next(e)){
         struct buffer * b = list_entry(e, struct buffer, elem);
-        if(b->dirty&&b->lock.holder==NULL){
+        if(b->dirty){
             lock_acquire(&b->lock);
             bwrite(b);
-            brelse(b);
+            lock_release(&b->lock);
         }
     }
     lock_release(&bcache.lock);
@@ -213,7 +209,7 @@ void io_queue_init(){
     struct io_task task;
     task.io_type = IO_READ;
     task.buffer  = NULL;
-    task.buffer->lock.holder;
+    // task.buffer->lock.holder;
     sema_init(&task.sema, 0);
     list_push_front(&io_queue, &task.elem);
     // sema_down(&task.sema);

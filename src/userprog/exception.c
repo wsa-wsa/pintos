@@ -172,7 +172,6 @@ page_fault (struct intr_frame *f)
       else if(vma==NULL)vma=alloc_stack(t, fault_addr);
    }
    if(vma==NULL){
-      printf("hasn't vma\n");
       sys_exit(-1);
       return;
    }

@@ -46,8 +46,8 @@ struct page_frame{
     struct vm_eara* vma;
     struct list_elem elem;
 };
-
-#define NUM_FRAMES_W 320
+//page-parallel 自动重启的BUG
+#define NUM_FRAMES_W 160
 #define NUM_FRAMES_R 16
 
 void flush_tlb(uint32_t upage);

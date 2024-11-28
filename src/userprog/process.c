@@ -331,6 +331,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  /* TODO: 最好改成file_open*/
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -720,7 +721,9 @@ void sys_exit(int status){
     status=-1;
   }else if(status>255)status%=256;
   t->xstatus=status;
-  thread_wakeup(t->parent);
+  if(t->chan!=NULL)
+    thread_unblock(t->chan);
+  // thread_wakeup(t->parent);
   // intr_disable();
   // release_mmap(t);
   free_page_frame(t);

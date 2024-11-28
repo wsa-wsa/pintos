@@ -18,6 +18,7 @@ main (int argc UNUSED, char *argv[])
   quiet = true;
 
   CHECK ((handle = open (argv[1])) > 1, "open \"%s\"", argv[1]);
+  // 将文件映射到地址p上
   CHECK (mmap (handle, p) != MAP_FAILED, "mmap \"%s\"", argv[1]);
   qsort_bytes (p, 1024 * 128);
   

@@ -9,10 +9,10 @@ static struct file *free_map_file;   /**< Free map file. */
 static struct bitmap *free_map;      /**< Free map, one bit per sector. */
 
 /* 将磁盘分为inode区和data区*/
-static struct file *inode_free_map_file;
-static struct bitmap *inode_free_map;
-static struct file *data_free_map_file;
-static struct bitmap *data_free_map;
+// static struct file *inode_free_map_file;
+// static struct bitmap *inode_free_map;
+// static struct file *data_free_map_file;
+// static struct bitmap *data_free_map;
 /** Initializes the free map. 创建空闲的映射*/
 void
 free_map_init (void) 
@@ -78,7 +78,7 @@ void
 free_map_create (void) 
 {
   /* Create inode. */
-  if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map)))
+  if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map), T_DEVICE))
     PANIC ("free map creation failed");
 
   /* Write bitmap to file. */

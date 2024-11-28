@@ -68,11 +68,6 @@ int inode_type(struct inode* inode){
   return inode->data.type;
 }
 
-void set_inode_type(struct inode* inode, int type){
-  inode->data.type = type;
-
-}
-
 int sector_idx_set(uint16_t* idx, size_t sector){
   memset(idx, -1, NLEVEL*sizeof(uint16_t));
   if(sector<NDIRECT){
@@ -99,36 +94,43 @@ static block_sector_t
 walk_to_sector(struct inode_disk* d_inode, block_sector_t inode_sector,size_t sectors, int alloc){
   uint16_t idx[NLEVEL];
   int indicator = sector_idx_set(idx, sectors);
-  block_sector_t* addr = NULL;
-  struct buffer * buf  = NULL;
-  block_sector_t bk_no = 0;
+  block_sector_t bk_no = 0, parent_bk = -1;
   for(int level=0; level<=indicator; ++level){
+    parent_bk = bk_no;
     if(level)
       {
-        buf = bread(fs_device, bk_no);
-        addr = boffset(buf, bk_no);
+        buffer_read(fs_device, bk_no, idx[level]*sizeof(bk_no), &bk_no, sizeof(bk_no));
       }
     else
       {
-        addr = d_inode->addr;
+        bk_no = d_inode->addr[idx[level]];
       }
-    bk_no = addr[idx[level]];
     if(bk_no == -1){
       if(alloc){
         free_map_allocate(1, &bk_no);
-        addr[idx[level]] = bk_no;
+        /* 当前的bk_no和上一级的bk_no在同一块缓冲区中 */
         if(level!=indicator)
           buffer_set(fs_device, bk_no, 0, -1, BLOCK_SECTOR_SIZE);
         if(!level)
-          buffer_write(fs_device, inode_sector, idx[level]*sizeof(*addr), &addr[idx[level]], sizeof(*addr));
+          {
+            buffer_write(fs_device, inode_sector, 
+              offsetof(struct inode_disk, addr)+idx[level]*sizeof(bk_no), 
+              &bk_no, sizeof(bk_no));
+            
+            d_inode->addr[idx[0]]=bk_no;
+          }
+        else
+          {
+            /* 上一级的bk_no没有写入buffer*/
+            /* 但是如果上一级是 inode_sector，这个就是错的*/
+            buffer_write(fs_device, parent_bk, 
+              idx[level]*sizeof(bk_no), 
+              &bk_no, sizeof(bk_no));
+          }
       }else{
         return -1;
       }
     }
-    if(level)
-      {
-        brelse(buf);
-      }
   }
   return bk_no;
 }
@@ -167,54 +169,64 @@ inode_init (void)
 static bool 
 inode_allocate(struct inode_disk *disk_inode, size_t sectors){
   block_sector_t bk_no = 0;
-  printf("l1 index:\n");
   if(sectors<=NDIRECT){
     for(int sec_no=0; sec_no<sectors; ++sec_no){
       free_map_allocate (1, &bk_no);
-      printf("%d ", bk_no);
       disk_inode->addr[sec_no] = bk_no;
     }
-    printf("\n");
   }else{
+    /* 分配一级索引*/
     for(int sec_no=0; sec_no<NDIRECT; ++sec_no){
       free_map_allocate (1, &bk_no);
-      printf("%d ", bk_no);
       disk_inode->addr[sec_no]=bk_no;
     }
-    sectors-=NDIRECT;
-    free_map_allocate (1, &disk_inode->addr[NDIRECT]);
-    printf("%d ", disk_inode->addr[NDIRECT]);
-    printf("\n");
+    sectors -= NDIRECT;
+    /* 分配二级索引*/
     uint32_t* addr = malloc(BLOCK_SECTOR_SIZE);
-    printf("l2 index:\n");
     if(sectors<=NINDIRECT*NENTRY){
-      for(int sec_no=0; sec_no<sectors; ++sec_no){
-        free_map_allocate (1, &addr[sec_no]);
-        printf("%d ", addr[sec_no]);
-      }
-      printf("\n");
-      buffer_write(fs_device, disk_inode->addr[NDIRECT], 0, addr, BLOCK_SECTOR_SIZE);
-      // block_write(fs_device, disk_inode->addr[NDIRECT], addr);
-    }else{
-      for(int sec_no=0; sec_no<NENTRY; ++sec_no){
-        free_map_allocate (1, &addr[sec_no]);
-          printf("%d ", bk_no);
-      }
-      printf("\n");
-      buffer_write(fs_device, disk_inode->addr[NDIRECT], 0, addr, BLOCK_SECTOR_SIZE);
-      // block_write(fs_device, disk_inode->addr[NDIRECT], addr);
-      sectors-=NENTRY;
-      uint16_t count = sectors/NENTRY;
-      uint32_t * s_addr = malloc(BLOCK_SECTOR_SIZE);
-      for(int sec_no=0; sec_no<count; ++sec_no){
-        free_map_allocate (1, &addr[sec_no]);
-        for(uint32_t s_no=0;s_no<sectors; ++s_no){
-          free_map_allocate (1, &s_addr[s_no]);
-          printf("l3 index %d ", sec_no);
+      uint16_t index2 = sectors/NENTRY;
+      for(int idx=0; idx<=index2; ++idx){
+        free_map_allocate (1, &disk_inode->addr[NDIRECT+idx]);
+        memset(addr, -1, BLOCK_SECTOR_SIZE);
+        for(int sec_no=0; sec_no<NENTRY&&sec_no<sectors; ++sec_no){
+          free_map_allocate (1, &addr[sec_no]);
         }
-        buffer_write(fs_device, addr[sec_no], 0, s_addr, BLOCK_SECTOR_SIZE);
-        // block_write(fs_device, addr[sec_no], s_addr);
-        sectors-=NENTRY;
+        buffer_write(fs_device, disk_inode->addr[NDIRECT+idx], 0, addr, BLOCK_SECTOR_SIZE);
+        sectors -= NENTRY;
+      }
+    }else{
+      /* 分配二级索引*/
+      for(int idx=0; idx<NINDIRECT; ++idx){
+        free_map_allocate (1, &disk_inode->addr[NDIRECT+idx]);
+        memset(addr, -1, BLOCK_SECTOR_SIZE);
+        for(int sec_no=0; sec_no<NENTRY; ++sec_no){
+          free_map_allocate (1, &addr[sec_no]);
+        }
+        buffer_write(fs_device, disk_inode->addr[NDIRECT+idx], 0, addr, BLOCK_SECTOR_SIZE);
+      }
+      sectors -= NINDIRECT*NENTRY;
+      /* 分配三级索引 */
+      uint16_t index1 = sectors/(NENTRY*NENTRY);
+      uint16_t index2 = (sectors/NENTRY)%NENTRY;
+      uint16_t index3  = sectors%NENTRY;
+      uint32_t * s_addr = malloc(BLOCK_SECTOR_SIZE);
+
+      /* level 0*/
+      for(int idx1=0; idx1<=index1; ++idx1){
+        free_map_allocate (1, &disk_inode->addr[NDIRECT+NINDIRECT+idx1]);
+        memset(addr, -1, BLOCK_SECTOR_SIZE);
+        /* level 1*/
+        for(int idx2=0;idx2<=index2; ++idx2){
+          free_map_allocate (1, &addr[idx2]);
+          memset(s_addr, -1, BLOCK_SECTOR_SIZE);
+          /* level 2*/
+          for(int sec_no=0; sec_no<NENTRY&&sec_no<sectors; ++sec_no){
+            free_map_allocate (1, &s_addr[sec_no]);
+          }
+          buffer_write(fs_device, addr[idx2], 0, s_addr, BLOCK_SECTOR_SIZE);
+          sectors-=NENTRY;
+        }
+        buffer_write(fs_device, disk_inode->addr[NDIRECT+NINDIRECT+idx1], 0, addr, BLOCK_SECTOR_SIZE);
       }
       free(s_addr);
     }
@@ -224,31 +236,32 @@ inode_allocate(struct inode_disk *disk_inode, size_t sectors){
 }
 
 static void inode_free(struct inode_disk *d_inode){
+  //TODO 待修改
   for(int i=0; i<NDIRECT; ++i){
-    if(!d_inode->addr[i])return;
+    if(d_inode->addr[i]==-1)return;
     free_map_release(d_inode->addr[i], 1);
   }
   for(int i=NDIRECT; i<NDIRECT+NINDIRECT; ++i){
-    if(!d_inode->addr[i])return;
+    if(d_inode->addr[i]==-1)return;
     struct buffer * buf = bread(fs_device, d_inode->addr[i]);
     uint32_t* addr = buf->cache;
     for(int sec_no; sec_no<NENTRY; ++sec_no){
-      if(!addr[sec_no])return;
+      if(addr[sec_no]==-1)return;
       free_map_release(addr[i], 1);
     }
     brelse(buf);
     free_map_release(d_inode->addr[i], 1);
   }
   for(int i=NDIRECT+NINDIRECT; i<NDIRECT+NINDIRECT+NDINDIRECT; ++i){
-    if(!d_inode->addr[i])return;
+    if(d_inode->addr[i]==-1)return;
     struct buffer * buf = bread(fs_device, d_inode->addr[i]);
     uint32_t* addr = buf->cache;
     for(int sec_no=0; sec_no<NENTRY; ++sec_no){
-      if(!addr[sec_no])return;
+      if(addr[sec_no]==-1)return;
       struct buffer * sbuf = bread(fs_device, addr[sec_no]);
       uint32_t* s_addr = sbuf->cache;
       for(int bk_no=0; bk_no<NENTRY; ++bk_no){
-        if(!s_addr[bk_no])return;
+        if(s_addr[bk_no]==-1)return;
         free_map_release(s_addr[bk_no], 1);
       }
       brelse(sbuf);
@@ -265,7 +278,7 @@ static void inode_free(struct inode_disk *d_inode){
    Returns false if memory or disk allocation fails. */
 /** 使用 LENGTH 字节的数据初始化inode，并将新 inode 写入文档系统设备上的扇区SECTOR。 */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, uint8_t type)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -286,6 +299,7 @@ inode_create (block_sector_t sector, off_t length)
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
+      disk_inode->type  = type;
 
       if (inode_allocate (disk_inode, sectors)) 
         {
@@ -396,7 +410,7 @@ inode_close (struct inode *inode)
       else
         {
         //将inode内部修改的内容写回磁盘
-        buffer_write(fs_device, inode->sector, 0, &inode->data, sizeof(inode->data));
+        // buffer_write(fs_device, inode->sector, 0, &inode->data, sizeof(inode->data));
         }
       free (inode); 
     }
@@ -438,8 +452,11 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       int chunk_size = size < min_left ? size : min_left;
       if (chunk_size <= 0)
         break;
-      // 每次都从扇区起始位置开始读
-      buffer_read(fs_device, sector_idx, sector_ofs, buffer + bytes_read, chunk_size);
+      //存在逻辑空洞
+      if (sector_idx==-1&&inode_remain)
+        memset(buffer + bytes_read, 0, chunk_size);
+      else // 每次都从扇区起始位置开始读
+        buffer_read(fs_device, sector_idx, sector_ofs, buffer + bytes_read, chunk_size);
       /* Advance. */
       size -= chunk_size;
       inode_remain -= chunk_size;
@@ -482,6 +499,9 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       // offset为文件偏移量
       block_sector_t index = offset/BLOCK_SECTOR_SIZE;
       block_sector_t sector_idx = walk_to_sector (&inode->data, inode->sector, index, 1);;
+      // 磁盘空间不够
+      if (sector_idx==-1)
+        break;
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
  
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -536,4 +556,9 @@ off_t
 inode_length (const struct inode *inode)
 {
   return inode->data.length;
+}
+
+bool
+inode_will_remove(struct inode *inode){
+  return inode->removed;
 }

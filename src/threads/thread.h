@@ -25,8 +25,8 @@ typedef int tid_t;
 #define PRI_MIN 0                       /**< Lowest priority. */
 #define PRI_DEFAULT 31                  /**< Default priority. */
 #define PRI_MAX 63                      /**< Highest priority. */
-
-#define NOFILE 8
+// TODO:待修改成堆分配内存
+#define NOFILE 16
 /** A kernel thread or user process.
    每个线程结构都存储在自己的4KB 页中，剩余部分分给内核栈
    Each thread structure is stored in its own 4 kB page.  The
@@ -95,6 +95,7 @@ struct thread
     
     void *chan;
     int xstatus;
+    uint64_t ticks;
     struct thread *parent;
     struct file *exec;
     struct list vm_list;
@@ -154,8 +155,8 @@ void thread_yield (void);
 /** Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
-void thread_sleep(void *);
-void thread_wakeup(void *);
+void thread_sleep(uint64_t);
+void thread_wakeup(uint64_t);
 void thread_wait(tid_t);
 int thread_get_priority (void);
 void thread_set_priority (int);

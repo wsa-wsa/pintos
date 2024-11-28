@@ -33,6 +33,10 @@ filesys_init (bool format)
     do_format ();
 
   free_map_open ();
+  struct dir *dir = dir_open_root ();
+  dir_add (dir, ".", inode_get_inumber(dir_get_inode(dir)));
+  dir_add (dir, "..", inode_get_inumber(dir_get_inode(dir)));
+  dir_close (dir);
 }
 
 /** Shuts down the file system module, writing any unwritten data
@@ -40,7 +44,7 @@ filesys_init (bool format)
 void
 filesys_done (void) 
 {
-  buffer_write_back();
+  buffer_write_to_disk();
   free_map_close ();
 }
 
@@ -55,7 +59,7 @@ filesys_create (const char *name, off_t initial_size)
   struct dir *dir = dir_open_root ();
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size)
+                  && inode_create (inode_sector, initial_size, T_FILE)
                   && dir_add (dir, name, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
@@ -69,8 +73,9 @@ file_create (struct dir *dir, const char *name, off_t initial_size)
 {
   block_sector_t inode_sector = 0;
   bool success = (dir != NULL
+                  && !inode_will_remove(dir_get_inode(dir))
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size)
+                  && inode_create (inode_sector, initial_size, T_FILE)
                   && dir_add (dir, name, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
@@ -146,26 +151,59 @@ bool sys_create (const char *file, unsigned initial_size){
   }
 
   lock_acquire(&filesys_lock);
-  // lock_try_acquire(&filesys_lock);
-  bool ret = filesys_create(file, initial_size);
+  char name[NAME_MAX + 1];
+  struct inode * ip = nameiparent(file, name);
+  if(!ip)
+    {
+      lock_release(&filesys_lock);
+      return false;
+    }
+  struct dir * cur = dir_open(ip);
+  bool ret = file_create(cur, name, initial_size);
+  dir_close(cur);
+  // bool ret = filesys_create(file, initial_size);
   lock_release(&filesys_lock);
 
   return ret;
 }
 
 bool sys_remove (const char *file){
-  return filesys_remove(file);
+  if(!strcmp(file, ".")||!strcmp(file, "..")||!strcmp(file, "/")){
+    // PANIC("can't remove . or ..!!!");
+    return false;
+  }
+  char name[NAME_MAX + 1];
+  
+  struct inode* ip = nameiparent(file, name);
+  struct dir *dir = dir_open(ip);
+  // 删除dir之前必须先检查dir确认dir为空，删除文件则不需要
+  bool success = (dir != NULL && dir_remove (dir, name));
+  dir_close (dir); 
+
+  return success;
+  // return filesys_remove(file);
 }
 
 int sys_open (const char *file){
   if(!file||get_user(file)==-1){
     sys_exit(-1);
   }
-  // lock_acquire(&filesys_lock);
-  struct file * f = filesys_open(file);
-  // lock_release(&filesys_lock);
+
+  // file_open();
+  if(strlen(file)==0)
+    return -1;
+  lock_acquire(&filesys_lock);
+  struct inode* ip = namei(file);
+  if(!ip)
+    {
+      lock_release(&filesys_lock);
+      return -1;
+    }
+  struct file * f = file_open(ip);
+  lock_release(&filesys_lock);
   if(f==NULL)return -1;
   int fd = get_fd(f);
+  // printf("fd :%d\n", fd);
   return fd;
 }
 
@@ -220,7 +258,15 @@ int sys_write (int fd, const void *buffer, unsigned length){
     
   }else{
     struct file *file = get_file(fd);
-    if(!file)sys_exit(-1);
+    if(!file){
+      free(buf);
+      sys_exit(-1);
+    }
+    if(inode_type(file_get_inode(file))==T_DIR){
+      free(buf);
+      return -1;
+    }
+    
     lock_acquire(&filesys_lock);
     length = file_write(file, buf, length);
     lock_release(&filesys_lock);

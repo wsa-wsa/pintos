@@ -51,13 +51,17 @@ sort_chunks (const char *subprocess, int exit_status)
 
       /* Write this chunk to a file. */
       snprintf (fn, sizeof fn, "buf%zu", i);
+      // 创建chunk_size大小的文件, buf-x
       create (fn, CHUNK_SIZE);
       quiet = true;
+      // 打开该文件
       CHECK ((handle = open (fn)) > 1, "open \"%s\"", fn);
+      // 向buf-x中写入CHUNK_SIZE大小的数据
       write (handle, buf1 + CHUNK_SIZE * i, CHUNK_SIZE);
       close (handle);
 
       /* Sort with subprocess. */
+      // 根据cmd创建子进程进行排序，fn为读写的文件名
       snprintf (cmd, sizeof cmd, "%s %s", subprocess, fn);
       CHECK ((children[i] = exec (cmd)) != -1, "exec \"%s\"", cmd);
       quiet = false;

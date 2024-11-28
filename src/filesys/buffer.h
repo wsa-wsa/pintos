@@ -18,7 +18,6 @@ struct buffer{
   uint16_t valid;
   uint8_t cache[BUFFER_SIZE];
   struct lock lock;
-  struct semaphore sema;
   struct list_elem elem;
 };
 void buffer_init();
@@ -30,5 +29,6 @@ void *boffset(struct buffer *buf, block_sector_t bno);
 void buffer_write(struct block * dev, block_sector_t sector, size_t ofs, const void * buf, size_t size);
 void buffer_set(struct block * dev, block_sector_t sector, size_t ofs, uint8_t byte, size_t size);
 void buffer_read(struct block * dev, block_sector_t sector, size_t ofs, const void * buf, size_t size);
-void buffer_write_back();
+void buffer_write_to_disk();
+
 #endif

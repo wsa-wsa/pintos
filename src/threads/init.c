@@ -154,10 +154,12 @@ pintos_init (void)
       prev = c;
       c = input_getc();
       if(c==13){
+        //待修正
+        input_putc('\n');
         buf[len++]='\0';
-        process_wait(process_execute(buf));
-        // run_actions (argv);
-        // run_task(argv);
+        // process_wait(process_execute(buf));
+        argv[0]=buf;
+        run_actions (argv);
         printf("exec %s\n", buf);
         len=0;
         printf("USTCOS>");
