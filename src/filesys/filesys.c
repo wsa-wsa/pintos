@@ -15,7 +15,8 @@ struct block *fs_device;
 
 struct lock filesys_lock;
 static void do_format (void);
-static struct file * sys_openfile_tabel[SYS_OFILE_SIZE];
+//系统文件打开表
+// static struct file * sys_openfile_tabel[SYS_OFILE_SIZE];
 /** Initializes the file system module.
    If FORMAT is true, reformats the file system. */
 void
@@ -30,13 +31,15 @@ filesys_init (bool format)
   free_map_init ();
 
   if (format) 
-    do_format ();
-
-  free_map_open ();
-  struct dir *dir = dir_open_root ();
-  dir_add (dir, ".", inode_get_inumber(dir_get_inode(dir)));
-  dir_add (dir, "..", inode_get_inumber(dir_get_inode(dir)));
-  dir_close (dir);
+    {
+      //必须要进行format后面才可以正确运行
+      do_format ();
+      free_map_open ();
+      struct dir *dir = dir_open_root ();
+      dir_add (dir, ".", inode_get_inumber(dir_get_inode(dir)));
+      dir_add (dir, "..", inode_get_inumber(dir_get_inode(dir)));
+      dir_close (dir);
+    }
 }
 
 /** Shuts down the file system module, writing any unwritten data
@@ -183,7 +186,22 @@ bool sys_remove (const char *file){
   return success;
   // return filesys_remove(file);
 }
-
+struct file *
+sys_file_open(const char *file){
+  if(strlen(file)==0)
+    return 0;
+  lock_acquire(&filesys_lock);
+  struct inode* ip = namei(file);
+  if(!ip)
+    {
+      lock_release(&filesys_lock);
+      return -1;
+    }
+  struct file * f = file_open(ip);
+  lock_release(&filesys_lock);
+  if(f==NULL)return NULL;
+  return f;
+}
 int sys_open (const char *file){
   if(!file||get_user(file)==-1){
     sys_exit(-1);
@@ -218,21 +236,20 @@ int sys_read (int fd, char *buffer, unsigned length){
     sys_exit(-1);
   }
 
-  char* buf=(char*)malloc(length*sizeof(char));
-  if(fd==STDOUT_FILENO){
-    // struct file *f =get_file(fd);
-    // f->sw.read(STDOUT_FILENO, buffer, length);
-      // printf("begin:");
-      int i;
-      for(i=0; i<length; ++i){
-        // buffer[i] = input_getc();
-        // if(c=='\n')return i;
-        // =c;
-      }
-      return i+1;
-  }else{
+  if(fd==STDOUT_FILENO){   //从标准输出中读
+    int pos = 0;
+    return pos;
+  }else if(fd==STDIN_FILENO){  //从标准输入中读
+    int pos = 0;
+    while (pos< length){
+      buffer[pos++] = input_getc();
+    }
+    return pos;
+  }
+  else{
     struct file* file = get_file(fd);
     if(!file)return -1;
+    char* buf=(char*)malloc(length*sizeof(char));
     lock_acquire(&filesys_lock);
     // read file
     length=file_read(file, buf, length);
@@ -252,10 +269,10 @@ int sys_write (int fd, const void *buffer, unsigned length){
   char* buf=(char*)malloc(length*sizeof(char));
   memcpy(buf, buffer, length);
 
-  if(fd==STDOUT_FILENO){
+  if(fd==STDOUT_FILENO){ //向标准输出写
     putbuf(buf, length);
-  }else if(fd==STDIN_FILENO){
-    
+  }else if(fd==STDIN_FILENO){ //向标准输入写
+    // 暂不实现
   }else{
     struct file *file = get_file(fd);
     if(!file){

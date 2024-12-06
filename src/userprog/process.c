@@ -117,7 +117,7 @@ start_process (void *parameters)
     palloc_free_page (file_name);
     sys_exit(-1);
   }
-  thread_yield (); 
+  // thread_yield (); 
   for(int i=argc-1; ~i; --i){
     int n = strlen(argv[i]);
     if_.esp -= (n + 1);
@@ -331,7 +331,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  /* TODO: 最好改成file_open*/
+  /* TODO: 最好改成换成可加载不同目录的函数*/
   file = filesys_open (file_name);
   if (file == NULL) 
     {

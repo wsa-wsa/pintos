@@ -34,6 +34,8 @@ intq_full (const struct intq *q)
 /** Removes a byte from Q and returns it.
    If Q is empty, sleeps until a byte is added.
    When called from an interrupt handler, Q must not be empty. */
+/** 从 Q 中删除一个字节并返回它。如果 Q 为空,则在添加一个字节之前处于休眠状态。
+ * 当从中断处理进程调用时,Q 不得为空。 */
 uint8_t
 intq_getc (struct intq *q) 
 {

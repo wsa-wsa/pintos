@@ -1,4 +1,4 @@
-symbol-file src/filesys/build/kernel.o
+# symbol-file src/filesys/build/kernel.o
 # add-symbol-file src/vm/build/lib/user/entry.o 0x8048711
 # add-symbol-file src/vm/build/tests/main.o 0x80486b5
 # add-symbol-file src/vm/build/lib/user/entry.o 0x0804884a
@@ -13,7 +13,8 @@ symbol-file src/filesys/build/kernel.o
 # add-symbol-file src/userprog/build/lib/user/syscall.o 0x0804A475
 # add-symbol-file src/vm/build/tests/vm/child-linear.o 0x8048074
 
-break process.c:152
+# break init.c:99
+# break process.c:152
 # break *0x8048711
 # break *0x80486b5
 # break *0x8048074
@@ -22,4 +23,4 @@ break process.c:152
 # break *0x8048074
 # break *0x0804809c
 # break thread.c:634
-target remote 127.0.0.1:1234
+# target remote 127.0.0.1:1234

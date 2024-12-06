@@ -15,7 +15,7 @@ main (void)
       char command[80];
 
       /* Read command. */
-      printf ("--");
+      printf ("$");
       read_line (command, sizeof command);
       
       /* Execute command. */
@@ -65,6 +65,10 @@ read_line (char line[], size_t size)
           return;
 
         case '\b':
+          backspace (&pos, line);
+          break;
+
+        case '\x7F':
           backspace (&pos, line);
           break;
 

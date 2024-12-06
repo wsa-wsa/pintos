@@ -46,6 +46,13 @@ input_getc (void)
   return key;
 }
 
+void 
+input_delc (void)
+{
+  serial_putc('\b');  // 光标左移
+  serial_putc(' ');   // 清空当前光标位置
+  serial_putc('\b');  // 光标再次左移
+}
 /** Returns true if the input buffer is full,
    false otherwise.
    Interrupts must be off. */

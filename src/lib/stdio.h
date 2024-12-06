@@ -12,7 +12,9 @@
 #include_next <stdio.h>
 
 /** Predefined file handles. */
+//标准输入
 #define STDIN_FILENO 0
+//标准输出
 #define STDOUT_FILENO 1
 
 /** Standard functions. */

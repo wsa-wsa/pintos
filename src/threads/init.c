@@ -69,6 +69,7 @@ static void paging_init (void);
 
 static char **read_command_line (void);
 static char **parse_options (char **argv);
+static void parse_args (char **argv, char *args);
 static void run_actions (char **argv);
 static void usage (void);
 
@@ -145,7 +146,7 @@ pintos_init (void)
     run_actions (argv);
   } else {
     // TODO: no command line passed to kernel. Run interactively 
-    char buf[128];
+    char cmd[128];
     char prev=' ', c=' ';
     int len;
     len=0;
@@ -155,19 +156,18 @@ pintos_init (void)
       c = input_getc();
       if(c==13){
         //待修正
-        input_putc('\n');
-        buf[len++]='\0';
-        // process_wait(process_execute(buf));
-        argv[0]=buf;
+        printf("%c", c);
+        cmd[len++]='\0';
+        parse_args(argv, cmd);
         run_actions (argv);
-        printf("exec %s\n", buf);
         len=0;
         printf("USTCOS>");
       }else{
         if(c==0x7f&&len){
           len--;
+          input_delc();
         }else{
-          buf[len++]=c;
+          cmd[len++]=c;
           printf("%c", c);
         }
       }
@@ -263,6 +263,16 @@ read_command_line (void)
   printf ("\n");
 
   return argv;
+}
+
+static void
+parse_args (char **argv, char *args){
+  char *token, *save_ptr;
+  int argc=0;
+  for (token = strtok_r (args, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+    argv[argc++]=token;
+  }
+  argv[argc]=NULL;
 }
 /** Parses options in ARGV[]
    and returns the first non-option argument. */
