@@ -33,12 +33,15 @@
    descriptor.  We handle those by allocating contiguous pages
    with the page allocator and sticking the allocation size at
    the beginning of the allocated block's arena header. */
-
+// 描述符
 /** Descriptor. */
 struct desc
   {
+    // 每个元素的大小以字节为单位。
     size_t block_size;          /**< Size of each element in bytes. */
+    // 每个区域的块的大小
     size_t blocks_per_arena;    /**< Number of blocks in an arena. */
+    // 空闲块链表
     struct list free_list;      /**< List of free blocks. */
     struct lock lock;           /**< Lock. */
   };
@@ -49,11 +52,14 @@ struct desc
 /** Arena. */
 struct arena 
   {
+    // 魔数
     unsigned magic;             /**< Always set to ARENA_MAGIC. */
+    // 属于哪个描述符,大区块为 null。
     struct desc *desc;          /**< Owning descriptor, null for big block. */
+    // 空闲块的数量，大区块的页的数量
     size_t free_cnt;            /**< Free blocks; pages in big block. */
   };
-
+// 空闲块元素
 /** Free block. */
 struct block 
   {
@@ -64,11 +70,13 @@ struct block
 // 设备文件表(设备文件描述符)
 static struct desc descs[10];   /**< Descriptors. */
 static size_t desc_cnt;         /**< Number of descriptors. */
-
+// 块转区域
 static struct arena *block_to_arena (struct block *);
+// 区域转块
 static struct block *arena_to_block (struct arena *, size_t idx);
 
 /** Initializes the malloc() descriptors. */
+// 初始化malloc描述符
 void
 malloc_init (void) 
 {
@@ -76,9 +84,12 @@ malloc_init (void)
 
   for (block_size = 16; block_size < PGSIZE / 2; block_size *= 2)
     {
+      // 块大小为block_size的描述符
       struct desc *d = &descs[desc_cnt++];
       ASSERT (desc_cnt <= sizeof descs / sizeof *descs);
+      // 设置块的大小
       d->block_size = block_size;
+      // 1页中含有块大小为block_size的块的数量
       d->blocks_per_arena = (PGSIZE - sizeof (struct arena)) / block_size;
       list_init (&d->free_list);
       lock_init (&d->lock);
@@ -102,6 +113,7 @@ malloc (size_t size)
 
   /* Find the smallest descriptor that satisfies a SIZE-byte
      request. */
+  // 找到满足 SIZE-byte 请求的最小描述符。
   for (d = descs; d < descs + desc_cnt; d++)
     if (d->block_size >= size)
       break;
@@ -109,6 +121,7 @@ malloc (size_t size)
     {
       /* SIZE is too big for any descriptor.
          Allocate enough pages to hold SIZE plus an arena. */
+      // 分配大区块(每个块都有一个arena记录分配块的信息)
       size_t page_cnt = DIV_ROUND_UP (size + sizeof *a, PGSIZE);
       a = palloc_get_multiple (0, page_cnt);
       if (a == NULL)
@@ -125,6 +138,7 @@ malloc (size_t size)
   lock_acquire (&d->lock);
 
   /* If the free list is empty, create a new arena. */
+  // 如果空闲列表为空,请创建一个新的arena。初始化时，free_list为空
   if (list_empty (&d->free_list))
     {
       size_t i;
@@ -141,15 +155,19 @@ malloc (size_t size)
       a->magic = ARENA_MAGIC;
       a->desc = d;
       a->free_cnt = d->blocks_per_arena;
+      // 每页都有sizeof(struct arena)大小的内存永远不会被使用
       for (i = 0; i < d->blocks_per_arena; i++) 
         {
+          //block的地址，block最小为16字节(其中也包含了block中的free_elem)
           struct block *b = arena_to_block (a, i);
           list_push_back (&d->free_list, &b->free_elem);
         }
     }
 
   /* Get a block from free list and return it. */
+  // 弹出malloc描述符空闲链表的最后1块，并通过free_elem确定block的地址
   b = list_entry (list_pop_front (&d->free_list), struct block, free_elem);
+  // 通过page_down获得arena地址，块的arena总是在页的起始位置
   a = block_to_arena (b);
   a->free_cnt--;
   lock_release (&d->lock);
@@ -242,6 +260,7 @@ free (void *p)
           list_push_front (&d->free_list, &b->free_elem);
 
           /* If the arena is now entirely unused, free it. */
+          // 如果arena现在全部空闲,将整页进行释放。
           if (++a->free_cnt >= d->blocks_per_arena) 
             {
               size_t i;
@@ -270,6 +289,7 @@ free (void *p)
 static struct arena *
 block_to_arena (struct block *b)
 {
+  // 通过pg_round_down获得arena的地址
   struct arena *a = pg_round_down (b);
 
   /* Check that the arena is valid. */
@@ -285,12 +305,14 @@ block_to_arena (struct block *b)
 }
 
 /** Returns the (IDX - 1)'th block within arena A. */
+// 返回 arena A中第(IDX-1) 个块。
 static struct block *
 arena_to_block (struct arena *a, size_t idx) 
 {
   ASSERT (a != NULL);
   ASSERT (a->magic == ARENA_MAGIC);
   ASSERT (idx < a->desc->blocks_per_arena);
+  // a为页开始的地址，sizeof *a也就是从页开始arena的大小
   return (struct block *) ((uint8_t *) a
                            + sizeof *a
                            + idx * a->desc->block_size);

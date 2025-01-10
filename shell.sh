@@ -17,4 +17,4 @@ pintos --filesys-size=2 \
 -p ../../examples/pwd -a pwd \
 -p ../../examples/recursor -a recursor \
 -p ../../examples/rm -a rm \
--- -f  run 'shell'
+--gdb -- -f  run 'shell'

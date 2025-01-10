@@ -1,5 +1,6 @@
 .idea/
 .swp
+.cache
 GPATH
 GRTAGS
 GTAGS
